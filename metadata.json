@@ -1,0 +1,6 @@
+{
+  "name": "Salute Remote+",
+  "description": "Виртуальный iOS-пульт для телевизоров на Salute TV.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

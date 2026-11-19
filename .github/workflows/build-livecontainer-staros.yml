@@ -1,0 +1,97 @@
+name: Build LiveContainer with StarOS Bonjour fix
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/build-livecontainer-staros.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  patch:
+    name: Patch official LiveContainer IPA
+    runs-on: macos-15
+    steps:
+      - name: Download latest official LiveContainer nightly
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --retry-all-errors \
+            "https://github.com/LiveContainer/LiveContainer/releases/download/nightly/LiveContainer.ipa" \
+            --output LiveContainer-upstream.ipa
+          test -s LiveContainer-upstream.ipa
+
+      - name: Add StarOS Bonjour service and package IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf Payload LiveContainer-StarOS.ipa
+          unzip -q LiveContainer-upstream.ipa
+          APP="Payload/LiveContainer.app"
+          PLIST="$APP/Info.plist"
+
+          test -d "$APP"
+          test -f "$PLIST"
+
+          python3 - <<'PY'
+          import plistlib
+          from pathlib import Path
+
+          path = Path("Payload/LiveContainer.app/Info.plist")
+          with path.open("rb") as stream:
+              info = plistlib.load(stream)
+
+          services = info.get("NSBonjourServices")
+          if not isinstance(services, list):
+              raise SystemExit("NSBonjourServices is missing or is not an array")
+          if not info.get("NSLocalNetworkUsageDescription"):
+              raise SystemExit("NSLocalNetworkUsageDescription is missing")
+
+          if "_staros._tcp" not in services:
+              services.append("_staros._tcp")
+
+          with path.open("wb") as stream:
+              plistlib.dump(info, stream, fmt=plistlib.FMT_XML, sort_keys=False)
+
+          with path.open("rb") as stream:
+              verified = plistlib.load(stream)
+          assert "_staros._tcp" in verified["NSBonjourServices"]
+          print("Verified NSBonjourServices:", verified["NSBonjourServices"])
+          print("LiveContainer version:", verified.get("CFBundleShortVersionString", "unknown"))
+          PY
+
+          # SideStore must re-sign the modified app with the user's own certificate.
+          find Payload -type d -name "_CodeSignature" -prune -exec rm -rf {} +
+          find Payload -type f -name "embedded.mobileprovision" -delete
+          xattr -cr Payload || true
+
+          ditto -c -k --sequesterRsrc --keepParent Payload LiveContainer-StarOS.ipa
+          test -s LiveContainer-StarOS.ipa
+
+          # Verify the final archive contains the patched host Info.plist.
+          unzip -p LiveContainer-StarOS.ipa Payload/LiveContainer.app/Info.plist > /tmp/LiveContainer-Info.plist
+          python3 - <<'PY'
+          import plistlib
+          with open("/tmp/LiveContainer-Info.plist", "rb") as stream:
+              info = plistlib.load(stream)
+          assert "_staros._tcp" in info["NSBonjourServices"]
+          print("Final IPA verified: _staros._tcp is present")
+          PY
+          unzip -Z1 LiveContainer-StarOS.ipa | grep -Fx "Payload/LiveContainer.app/Info.plist"
+
+          {
+            echo "### LiveContainer Bonjour patch"
+            echo "- Added `_staros._tcp` to the host app's `NSBonjourServices`."
+            echo "- Based on the official LiveContainer nightly IPA."
+            echo "- This IPA is unsigned after patching. Install/update it through SideStore so SideStore re-signs it."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload patched IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: LiveContainer-StarOS-Bonjour-IPA
+          path: LiveContainer-StarOS.ipa
+          if-no-files-found: error
+          retention-days: 14
