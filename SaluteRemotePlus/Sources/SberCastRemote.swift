@@ -251,6 +251,11 @@ final class SberCastRemote: NSObject, ObservableObject, LibSberCast.SberCastList
                 DebugLog.add("ЗАПРОС → mediaCommand(\(cmd)), id=\(String(describing: req))")
                 showNotice(nextPlaying ? "Воспроизведение" : "Пауза")
                 return
+            case .settings:
+                let req = cast.sendDirective(deviceId: id, directive: LibSberCast.CastDirective(.openDeeplink("sberdevices_app_v2://settings")))
+                DebugLog.add("ЗАПРОС → openDeeplink(settings), id=\(String(describing: req))")
+                showNotice("Открываем настройки ТВ")
+                return
             default:
                 break
             }
@@ -313,8 +318,12 @@ final class SberCastRemote: NSObject, ObservableObject, LibSberCast.SberCastList
     }
 
     func sendKey(_ code: Int32) {
-        DebugLog.add("ДЕЙСТВИЕ: клавиша \(code)")
-        wire.press(code)
+        DebugLog.add("ДЕЙСТВИЕ: клавиша клавиатуры \(code)")
+        guard session != nil else {
+            showNotice("Канал пульта ещё не готов")
+            return
+        }
+        wire.sendKeyboardKey(code)
     }
 
     /// Повторно запросить у ТВ параметры игрового канала (с проверкой состояния соединения).
@@ -389,10 +398,13 @@ final class SberCastRemote: NSObject, ObservableObject, LibSberCast.SberCastList
 
     func typeText(_ text: String, submit: Bool) {
         DebugLog.add("ДЕЙСТВИЕ: ввод текста, символов \(text.count), Enter: \(submit) (сам текст не записывается)")
-        guard session != nil else { notice = "Канал пульта ещё не готов"; return }
-        let skipped = wire.type(text)
-        if submit { wire.press(KeyMap.enter) }
-        notice = skipped.isEmpty ? nil : "Не удалось набрать: \(String(skipped)) — используйте голос или поиск YouTube"
+        guard session != nil else {
+            showNotice("Канал пульта ещё не готов")
+            return
+        }
+        wire.typeSymbols(text)
+        if submit { wire.sendKeyboardKey(KeyMap.enter) }
+        showNotice(nil)
     }
 
     func youtubeSearch(_ text: String) {
@@ -503,7 +515,13 @@ final class SberCastRemote: NSObject, ObservableObject, LibSberCast.SberCastList
         }
 
         if connectedDevice != nil {
-            if let s = session, !wire.ready { wire.prepare(session: s) }
+            if let s = session {
+                if wire.ready {
+                    wire.resumeKeepalive()
+                } else {
+                    wire.prepare(session: s)
+                }
+            }
             reconnectGamepadIfNeeded()
         } else {
             reconnectSavedDeviceIfPossible()
@@ -514,6 +532,7 @@ final class SberCastRemote: NSObject, ObservableObject, LibSberCast.SberCastList
         guard !paused else { return }
         DebugLog.add("ЖИЗНЕННЫЙ ЦИКЛ: приложение уходит в фон, pause()")
         paused = true
+        wire.pauseKeepalive()
         if voiceState != .idle { cancelVoice() }
         restartTask?.cancel()
         restartTask = nil
