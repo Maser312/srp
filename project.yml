@@ -10,8 +10,10 @@ targets:
     deploymentTarget: "15.0"
     sources:
       - path: SaluteRemotePlus/Sources
+      - path: SaluteRemotePlus/Resources/Assets.xcassets
     settings:
       INFOPLIST_FILE: SaluteRemotePlus/Resources/Info.plist
+      ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       PRODUCT_BUNDLE_IDENTIFIER: com.andrey.saluteremoteplus
       PRODUCT_NAME: SaluteRemotePlus
       SWIFT_VERSION: "5.0"
