@@ -18,6 +18,7 @@ enum RemoteCommand: String, CaseIterable, Identifiable {
     case channelUp = "CHANNEL_UP"
     case channelDown = "CHANNEL_DOWN"
     case playPause = "PLAY_PAUSE"
+    case mouseClick = "MOUSE_CLICK"
 
     var id: String { rawValue }
 
@@ -35,6 +36,7 @@ enum RemoteCommand: String, CaseIterable, Identifiable {
         case .volumeDown: return 38
         case .power: return 39
         case .mute: return 40
+        case .mouseClick: return 44
         // Команды ниже преимущественно уходят через LibSberCast (deeplink / mediaCommand),
         // значения оставлены как безопасные резервные коды.
         case .settings: return 35
