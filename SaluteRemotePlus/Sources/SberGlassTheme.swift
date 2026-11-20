@@ -113,7 +113,7 @@ struct LiquidGlassPanel: View {
             shape.fill(.ultraThinMaterial)
 
             if highlighted {
-                shape.fill(SberPalette.accentButtonGradient.opacity(0.76))
+                shape.fill(SberPalette.accentButtonGradient).opacity(0.76)
             } else {
                 shape.fill(
                     LinearGradient(
@@ -152,7 +152,7 @@ struct LiquidGlassCircle: View {
             Circle().fill(.ultraThinMaterial)
 
             if accent || highlighted {
-                Circle().fill(SberPalette.accentButtonGradient.opacity(accent ? 0.88 : 0.65))
+                Circle().fill(SberPalette.accentButtonGradient).opacity(accent ? 0.88 : 0.65)
             } else {
                 Circle().fill(
                     LinearGradient(

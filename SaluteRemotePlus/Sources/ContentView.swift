@@ -51,18 +51,65 @@ enum TextSheetMode: String, CaseIterable, Identifiable {
     }
 }
 
+enum AppSection {
+    case home
+    case sberRemote
+    case liftMedia
+}
+
 struct ContentView: View {
     @StateObject private var remote = SberCastRemote()
     @Environment(\.scenePhase) private var scenePhase
+    @State private var section: AppSection = .home
 
     var body: some View {
         ZStack {
             SberLiquidBackdrop()
 
-            if remote.connectedDevice != nil {
-                RemotePadView(remote: remote)
-            } else {
-                ConnectionView(remote: remote)
+            switch section {
+            case .home:
+                SuperAppHomeView(
+                    remote: remote,
+                    onOpenSber: {
+                        Haptics.medium()
+                        withAnimation(.easeInOut(duration: 0.22)) {
+                            section = .sberRemote
+                        }
+                    },
+                    onOpenLift: {
+                        Haptics.medium()
+                        withAnimation(.easeInOut(duration: 0.22)) {
+                            section = .liftMedia
+                        }
+                    }
+                )
+                .transition(.opacity)
+
+            case .sberRemote:
+                Group {
+                    if remote.connectedDevice != nil {
+                        RemotePadView(remote: remote) {
+                            withAnimation(.easeInOut(duration: 0.22)) {
+                                section = .home
+                            }
+                        }
+                    } else {
+                        ConnectionView(remote: remote) {
+                            withAnimation(.easeInOut(duration: 0.22)) {
+                                section = .home
+                            }
+                        }
+                    }
+                }
+                .transition(.opacity)
+
+            case .liftMedia:
+                MediaHubView {
+                    withAnimation(.easeInOut(duration: 0.22)) {
+                        section = .home
+                    }
+                }
+                .transition(.opacity)
             }
         }
         .preferredColorScheme(.dark)
@@ -86,14 +133,217 @@ struct ContentView: View {
     }
 }
 
+// MARK: - Главное первое меню супераппа (Пульт Сбер / Лифт / Kenwood)
+
+struct SuperAppHomeView: View {
+    @ObservedObject var remote: SberCastRemote
+    let onOpenSber: () -> Void
+    let onOpenLift: () -> Void
+
+    @State private var kenwoodNoticeVisible = false
+
+    private var sberSubtitle: String {
+        if let dev = remote.connectedDevice {
+            return remote.wireReady ? "\(dev.name) · Пульт готов" : "\(dev.name) · Подключение…"
+        }
+        if !remote.devices.isEmpty {
+            return "Найдено ТВ: \(remote.devices.count)"
+        }
+        return "Управление Салют ТВ · Курсор · Аэромышь"
+    }
+
+    private var sberReady: Bool {
+        remote.connectedDevice != nil && remote.wireReady
+    }
+
+    var body: some View {
+        VStack(spacing: 22) {
+            Spacer(minLength: 16)
+
+            // Заголовок супераппа
+            VStack(spacing: 10) {
+                ZStack {
+                    LiquidGlassCircle(highlighted: false, accent: true)
+                        .frame(width: 82, height: 82)
+                    Image(systemName: "dot.radiowaves.left.and.right")
+                        .font(.system(size: 34, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+
+                Text("Salute Remote+")
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .foregroundStyle(SberPalette.brandGradient)
+
+                Text("Выберите раздел управления")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.60))
+            }
+
+            // Три основные кнопки главного меню
+            VStack(spacing: 14) {
+                // 1. Пульт Сбер
+                SuperAppMenuCard(
+                    symbol: "tv.fill",
+                    title: "Пульт Сбер",
+                    subtitle: sberSubtitle,
+                    badgeText: sberReady ? "Готов" : nil,
+                    badgeActive: sberReady,
+                    accentIcon: true,
+                    action: onOpenSber
+                )
+
+                // 2. Лифт (видеоплеер, локальные файлы, M3U, офлайн, DLNA/AirPlay)
+                SuperAppMenuCard(
+                    symbol: "play.tv.fill",
+                    title: "Лифт",
+                    subtitle: "Видеоплеер · M3U · Офлайн · DLNA и AirPlay",
+                    badgeText: nil,
+                    badgeActive: false,
+                    accentIcon: true,
+                    action: onOpenLift
+                )
+
+                // 3. Магнитола Kenwood (скоро)
+                SuperAppMenuCard(
+                    symbol: "car.fill",
+                    title: "Магнитола Kenwood",
+                    subtitle: "Управление автомагнитолой по Bluetooth",
+                    badgeText: "Скоро",
+                    badgeActive: false,
+                    accentIcon: false
+                ) {
+                    Haptics.tap()
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        kenwoodNoticeVisible = true
+                    }
+                }
+            }
+
+            if kenwoodNoticeVisible {
+                HStack(spacing: 10) {
+                    Image(systemName: "sparkles")
+                        .foregroundStyle(SberPalette.lime)
+                    Text("Раздел Kenwood подготовлен и будет подключён на следующем этапе.")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.84))
+                    Spacer()
+                }
+                .padding(14)
+                .background(LiquidGlassPanel(cornerRadius: 18))
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+
+            Spacer(minLength: 24)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+    }
+}
+
+private struct SuperAppMenuCard: View {
+    let symbol: String
+    let title: String
+    let subtitle: String
+    let badgeText: String?
+    let badgeActive: Bool
+    let accentIcon: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 15) {
+                ZStack {
+                    if accentIcon {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(SberPalette.accentButtonGradient)
+                            .opacity(0.85)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .strokeBorder(SberPalette.glassAccentBorder, lineWidth: 1)
+                            )
+                    } else {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color.white.opacity(0.08))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .strokeBorder(SberPalette.glassBorderGradient, lineWidth: 1)
+                            )
+                    }
+                    Image(systemName: symbol)
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(accentIcon ? .white : .white.opacity(0.65))
+                }
+                .frame(width: 54, height: 54)
+                .shadow(color: accentIcon ? SberPalette.brightGreen.opacity(0.28) : .clear, radius: 8, y: 3)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(title)
+                            .font(.headline.weight(.bold))
+                            .foregroundStyle(.white)
+
+                        if let badgeText {
+                            Text(badgeText)
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(badgeActive ? SberPalette.bgTop : .white.opacity(0.75))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(
+                                    Capsule()
+                                        .fill(badgeActive ? AnyShapeStyle(SberPalette.brandGradient) : AnyShapeStyle(Color.white.opacity(0.12)))
+                                )
+                        }
+                    }
+
+                    Text(subtitle)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.58))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+
+                Spacer(minLength: 4)
+
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.bold))
+                    .foregroundStyle(.white.opacity(0.40))
+            }
+            .padding(16)
+            .background(LiquidGlassPanel(cornerRadius: 24))
+        }
+        .buttonStyle(RemotePressStyle())
+    }
+}
+
 // MARK: - Экран подключения в стиле Сбер Liquid Glass
 
 struct ConnectionView: View {
     @ObservedObject var remote: SberCastRemote
+    let onBackToMenu: () -> Void
 
     var body: some View {
         VStack(spacing: 22) {
-            Spacer(minLength: 14)
+            HStack {
+                Button {
+                    Haptics.tap()
+                    onBackToMenu()
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 13, weight: .bold))
+                        Text("Меню")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .frame(height: 36)
+                    .background(LiquidGlassPanel(cornerRadius: 18))
+                }
+                .buttonStyle(RemotePressStyle())
+                Spacer()
+            }
+
+            Spacer(minLength: 6)
 
             VStack(spacing: 12) {
                 ZStack {
@@ -130,10 +380,12 @@ struct ConnectionView: View {
                             HStack(spacing: 14) {
                                 ZStack {
                                     RoundedRectangle(cornerRadius: 13, style: .continuous)
-                                        .fill(SberPalette.accentButtonGradient.opacity(0.28))
+                                        .fill(SberPalette.accentButtonGradient)
+                                        .opacity(0.28)
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 13, style: .continuous)
-                                                .strokeBorder(SberPalette.glassAccentBorder.opacity(0.6), lineWidth: 1)
+                                                .strokeBorder(SberPalette.glassAccentBorder, lineWidth: 1)
+                                                .opacity(0.6)
                                         )
                                     Image(systemName: "tv")
                                         .font(.title3.weight(.semibold))
@@ -203,6 +455,7 @@ struct StatusCard: View {
 
 struct RemotePadView: View {
     @ObservedObject var remote: SberCastRemote
+    let onBackToMenu: () -> Void
     @AppStorage("SaluteRemotePlus.padMode") private var storedPadModeRaw = CenterPadMode.dpad.rawValue
     @State private var showTextSheet = false
     @State private var initialTextSheetMode: TextSheetMode = .globalSearch
@@ -241,6 +494,19 @@ struct RemotePadView: View {
             VStack(spacing: vSpacing) {
                 // Верхняя панель устройства
                 HStack(spacing: 8) {
+                    Button {
+                        Haptics.tap()
+                        onBackToMenu()
+                    } label: {
+                        Image(systemName: "square.grid.2x2.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.88))
+                            .frame(width: 38, height: 38)
+                            .background(LiquidGlassCircle())
+                    }
+                    .buttonStyle(RemotePressStyle())
+                    .accessibilityLabel("Главное меню")
+
                     VStack(alignment: .leading, spacing: 2) {
                         Text(remote.connectedDevice?.name ?? "Салют ТВ")
                             .font(.system(size: compact ? 19 : 21, weight: .bold, design: .rounded))
@@ -977,7 +1243,8 @@ struct TouchpadSurfaceView: View {
                 .padding(.vertical, 12)
                 .background(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(SberPalette.accentButtonGradient.opacity(0.84))
+                        .fill(SberPalette.accentButtonGradient)
+                        .opacity(0.84)
                         .overlay(
                             RoundedRectangle(cornerRadius: 18, style: .continuous)
                                 .strokeBorder(.white.opacity(0.28), lineWidth: 1)

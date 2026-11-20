@@ -98,7 +98,7 @@ struct TrackpadSurfaceView: View {
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 4)
                                 .background(
-                                    Capsule().fill(SberPalette.accentButtonGradient.opacity(0.85))
+                                    Capsule().fill(SberPalette.accentButtonGradient).opacity(0.85)
                                 )
                                 .padding(.top, 8)
                             Spacer()
@@ -115,7 +115,8 @@ struct TrackpadSurfaceView: View {
                         .padding(.vertical, 7)
                         .background(
                             Capsule()
-                                .fill(SberPalette.accentButtonGradient.opacity(0.82))
+                                .fill(SberPalette.accentButtonGradient)
+                                .opacity(0.82)
                                 .overlay(Capsule().strokeBorder(.white.opacity(0.35), lineWidth: 1))
                         )
                         .transition(.scale(scale: 0.85).combined(with: .opacity))
@@ -390,7 +391,7 @@ struct AirMouseSurfaceView: View {
                             cycleSensitivity()
                         } label: {
                             HStack(spacing: 4) {
-                                Image(systemName: "dial.medium.fill")
+                                Image(systemName: "speedometer")
                                     .font(.system(size: 11, weight: .semibold))
                                 Text("Скорость \(currentSensitivityLabel)")
                                     .font(.caption2.weight(.semibold))
@@ -615,7 +616,8 @@ private struct MouseClickHoldButton: View {
                     .fill(isPressed ? SberPalette.accentButtonGradient : LinearGradient(colors: [SberPalette.green.opacity(0.55), SberPalette.teal.opacity(0.45)], startPoint: .leading, endPoint: .trailing))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .strokeBorder(SberPalette.glassAccentBorder.opacity(isPressed ? 1.0 : 0.65), lineWidth: 1)
+                            .strokeBorder(SberPalette.glassAccentBorder, lineWidth: 1)
+                            .opacity(isPressed ? 1.0 : 0.65)
                     )
             )
             .scaleEffect(isPressed ? 0.94 : 1.0)
