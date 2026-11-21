@@ -279,10 +279,18 @@ struct ServerHubView: View {
             ),
             presenting: pendingConfirmAction
         ) { item in
-            Button("Выполнить", role: item.action.isDestructive ? .destructive : nil) {
-                let targetServer = item.server
-                let targetAction = item.action
-                Task { await manager.sendPowerAction(targetAction, to: targetServer) }
+            if item.action.isDestructive {
+                Button("Выполнить", role: .destructive) {
+                    let targetServer = item.server
+                    let targetAction = item.action
+                    Task { await manager.sendPowerAction(targetAction, to: targetServer) }
+                }
+            } else {
+                Button("Выполнить") {
+                    let targetServer = item.server
+                    let targetAction = item.action
+                    Task { await manager.sendPowerAction(targetAction, to: targetServer) }
+                }
             }
             Button("Отмена", role: .cancel) {}
         } message: { item in
@@ -471,7 +479,7 @@ struct ServerHubView: View {
                     ServerGlassCircle()
                     Image(systemName: manager.requireBiometricLock ? "lock.fill" : "lock.open.fill")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(manager.requireBiometricLock ? ServerPalette.iruCyan : .white.opacity(0.75))
+                        .foregroundStyle(manager.requireBiometricLock ? ServerPalette.iruCyan : Color.white.opacity(0.75))
                 }
                 .frame(width: 38, height: 38)
             }
@@ -1068,7 +1076,7 @@ struct ServerEditorSheet: View {
                                                 .font(.system(size: 10, weight: .bold))
                                                 .lineLimit(1)
                                         }
-                                        .foregroundStyle(vendor == item ? .white : .white.opacity(0.65))
+                                        .foregroundStyle(vendor == item ? Color.white : Color.white.opacity(0.65))
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 10)
                                         .background(
@@ -1371,7 +1379,7 @@ struct ServerWebConsoleView: View {
                     } label: {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(controller.canGoBack ? .white : .white.opacity(0.28))
+                            .foregroundStyle(controller.canGoBack ? Color.white : Color.white.opacity(0.28))
                             .frame(width: 30, height: 34)
                     }
                     .disabled(!controller.canGoBack)
@@ -1381,7 +1389,7 @@ struct ServerWebConsoleView: View {
                     } label: {
                         Image(systemName: "chevron.right")
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(controller.canGoForward ? .white : .white.opacity(0.28))
+                            .foregroundStyle(controller.canGoForward ? Color.white : Color.white.opacity(0.28))
                             .frame(width: 30, height: 34)
                     }
                     .disabled(!controller.canGoForward)
@@ -1824,7 +1832,7 @@ private struct ServerWKWebViewRepresentable: UIViewRepresentable {
         private var backObservation: NSKeyValueObservation?
         private var forwardObservation: NSKeyValueObservation?
 
-        init(server: ServerProfile, password: String, controller: ServerWebConsoleController) {
+        nonisolated init(server: ServerProfile, password: String, controller: ServerWebConsoleController) {
             self.server = server
             self.password = password
             self.controller = controller

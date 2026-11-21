@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import CFNetwork
 import LocalAuthentication
 import Darwin
 
@@ -637,7 +638,7 @@ private enum ServerNetworkHelper {
 
     static func detectNetworkRoute(from path: NWPath) -> NetworkRouteStatus {
         guard path.status == .satisfied else { return .offline }
-        let vpnInterface = activeVPNInterfaceName()
+        let vpnInterface = activeVPNInterfaceName(from: path)
         let usesWiFi = path.usesInterfaceType(.wifi) || path.usesInterfaceType(.wiredEthernet)
 
         if let vpn = vpnInterface {
@@ -650,33 +651,27 @@ private enum ServerNetworkHelper {
     }
 
     /// Проверяет наличие активного VPN-туннеля (Kerio Control VPN / IPSec / OpenVPN / WireGuard)
-    /// по интерфейсам `utun*`, `ipsec*`, `ppp*` с назначенным не-link-local IPv4-адресом.
-    static func activeVPNInterfaceName() -> String? {
-        var ifaddrPointer: UnsafeMutablePointer<ifaddrs>?
-        guard getifaddrs(&ifaddrPointer) == 0, let firstAddr = ifaddrPointer else { return nil }
-        defer { freeifaddrs(ifaddrPointer) }
+    /// через системные scoped-интерфейсы CFNetwork и активные интерфейсы NWPath (без C-заголовка ifaddrs.h).
+    static func activeVPNInterfaceName(from path: NWPath) -> String? {
+        let vpnPrefixes = ["utun", "ipsec", "ppp", "tap", "tun"]
 
-        var ptr: UnsafeMutablePointer<ifaddrs>? = firstAddr
-        while let current = ptr {
-            let flags = Int32(current.pointee.ifa_flags)
-            let isUp = (flags & IFF_UP) != 0 && (flags & IFF_RUNNING) != 0
-            if isUp,
-               let namePtr = current.pointee.ifa_name,
-               let addr = current.pointee.ifa_addr,
-               addr.pointee.sa_family == UInt8(AF_INET) {
-                let name = String(cString: namePtr)
-                if name.hasPrefix("utun") || name.hasPrefix("ipsec") || name.hasPrefix("ppp") {
-                    var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-                    if getnameinfo(addr, socklen_t(addr.pointee.sa_len), &hostname, socklen_t(hostname.count), nil, 0, NI_NUMERICHOST) == 0 {
-                        let ip = String(cString: hostname)
-                        if !ip.isEmpty && !ip.hasPrefix("169.254.") && !ip.hasPrefix("127.") {
-                            return name
-                        }
-                    }
+        if let proxySettings = CFNetworkCopySystemProxySettings()?.takeRetainedValue() as? [String: Any],
+           let scoped = proxySettings["__SCOPED__"] as? [String: Any] {
+            for key in scoped.keys {
+                let lower = key.lowercased()
+                if vpnPrefixes.contains(where: { lower.hasPrefix($0) }) {
+                    return key
                 }
             }
-            ptr = current.pointee.ifa_next
         }
+
+        for iface in path.availableInterfaces where iface.type == .other {
+            let lower = iface.name.lowercased()
+            if vpnPrefixes.contains(where: { lower.hasPrefix($0) }) {
+                return iface.name
+            }
+        }
+
         return nil
     }
 
