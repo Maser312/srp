@@ -101,7 +101,9 @@ struct SberLiquidBackdrop: View {
     }
 }
 
-/// Стеклянная панель в стиле Liquid Glass (на iOS 26–27 — нативный `.glassEffect`).
+/// Полупрозрачная матовая подложка Сбера (для крупных контейнеров и fallback на iOS 15–25).
+/// Для интерактивных кнопок и карточек на iOS 26–27 используйте модификатор `.sberGlassPanel(...)`
+/// напрямую на контенте — так `.glassEffect` рендерит стекло строго ПОД текстом и иконками.
 struct LiquidGlassPanel: View {
     var cornerRadius: CGFloat = 22
     var highlighted: Bool = false
@@ -110,24 +112,6 @@ struct LiquidGlassPanel: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        #if compiler(>=6.2)
-        if #available(iOS 26.0, *) {
-            Color.clear
-                .glassEffect(
-                    highlighted
-                        ? (interactive ? .regular.tint(SberPalette.brightGreen.opacity(0.65)).interactive() : .regular.tint(SberPalette.brightGreen.opacity(0.65)))
-                        : (interactive ? .regular.tint(tint.opacity(0.08)).interactive() : .regular.tint(tint.opacity(0.08))),
-                    in: shape
-                )
-        } else {
-            legacyBody(shape: shape)
-        }
-        #else
-        legacyBody(shape: shape)
-        #endif
-    }
-
-    private func legacyBody(shape: RoundedRectangle) -> some View {
         ZStack {
             shape.fill(.ultraThinMaterial)
 
@@ -159,30 +143,13 @@ struct LiquidGlassPanel: View {
     }
 }
 
-/// Круглая стеклянная кнопка в стиле Liquid Glass (на iOS 26–27 — нативный интерактивный `.glassEffect`).
+/// Круглая полупрозрачная подложка (fallback для iOS 15–25).
+/// Для нативного Liquid Glass на iOS 26–27 используйте `.sberGlassCircle(...)` напрямую на контенте.
 struct LiquidGlassCircle: View {
     var highlighted: Bool = false
     var accent: Bool = false
 
     var body: some View {
-        #if compiler(>=6.2)
-        if #available(iOS 26.0, *) {
-            Color.clear
-                .glassEffect(
-                    (accent || highlighted)
-                        ? .regular.tint(SberPalette.brightGreen.opacity(accent ? 0.72 : 0.45)).interactive()
-                        : .regular.interactive(),
-                    in: Circle()
-                )
-        } else {
-            legacyBody
-        }
-        #else
-        legacyBody
-        #endif
-    }
-
-    private var legacyBody: some View {
         ZStack {
             Circle().fill(.ultraThinMaterial)
 
@@ -218,6 +185,66 @@ struct LiquidGlassCircle: View {
             x: 0,
             y: 4
         )
+    }
+}
+
+// MARK: - Прямые модификаторы Liquid Glass iOS 26–27 (стекло строго под контентом)
+
+extension View {
+    @ViewBuilder
+    func sberGlassPanel(
+        cornerRadius: CGFloat = 22,
+        highlighted: Bool = false,
+        tint: Color = SberPalette.teal,
+        interactive: Bool = false
+    ) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            let glassTint = highlighted
+                ? SberPalette.brightGreen.opacity(0.62)
+                : tint.opacity(0.08)
+            if interactive {
+                self.glassEffect(.regular.tint(glassTint).interactive(), in: shape)
+            } else {
+                self.glassEffect(.regular.tint(glassTint), in: shape)
+            }
+        } else {
+            self.background(LiquidGlassPanel(cornerRadius: cornerRadius, highlighted: highlighted, tint: tint))
+        }
+        #else
+        self.background(LiquidGlassPanel(cornerRadius: cornerRadius, highlighted: highlighted, tint: tint))
+        #endif
+    }
+
+    @ViewBuilder
+    func sberGlassCircle(
+        highlighted: Bool = false,
+        accent: Bool = false,
+        interactive: Bool = true
+    ) -> some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            if accent || highlighted {
+                let tint = SberPalette.brightGreen.opacity(accent ? 0.70 : 0.44)
+                if interactive {
+                    self.glassEffect(.regular.tint(tint).interactive(), in: Circle())
+                } else {
+                    self.glassEffect(.regular.tint(tint), in: Circle())
+                }
+            } else {
+                if interactive {
+                    self.glassEffect(.regular.interactive(), in: Circle())
+                } else {
+                    self.glassEffect(.regular, in: Circle())
+                }
+            }
+        } else {
+            self.background(LiquidGlassCircle(highlighted: highlighted, accent: accent))
+        }
+        #else
+        self.background(LiquidGlassCircle(highlighted: highlighted, accent: accent))
+        #endif
     }
 }
 

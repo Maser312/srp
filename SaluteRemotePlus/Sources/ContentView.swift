@@ -242,13 +242,11 @@ struct SuperAppHomeView: View {
 
                 // Заголовок супераппа
                 VStack(spacing: 10) {
-                    ZStack {
-                        LiquidGlassCircle(highlighted: false, accent: true)
-                            .frame(width: 80, height: 80)
-                        Image(systemName: "dot.radiowaves.left.and.right")
-                            .font(.system(size: 33, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
+                    Image(systemName: "dot.radiowaves.left.and.right")
+                        .font(.system(size: 33, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 80, height: 80)
+                        .sberGlassCircle(highlighted: false, accent: true, interactive: false)
 
                     Text("Salute Remote+")
                         .font(.system(size: 29, weight: .bold, design: .rounded))
@@ -403,17 +401,10 @@ private struct SuperAppMenuCard: View {
                     .foregroundStyle(.white.opacity(0.40))
             }
             .padding(16)
-            .background(
-                Group {
-                    switch theme {
-                    case .sber:
-                        LiquidGlassPanel(cornerRadius: 24)
-                    case .kenwood:
-                        KenwoodGlassPanel(cornerRadius: 24)
-                    case .server:
-                        ServerGlassPanel(cornerRadius: 24, accentGlow: ServerPalette.dellBlue)
-                    }
-                }
+            .nativeLiquidGlass(
+                in: RoundedRectangle(cornerRadius: 24, style: .continuous),
+                tint: glowColor.opacity(0.12),
+                interactive: true
             )
         }
         .buttonStyle(RemotePressStyle())
@@ -442,7 +433,7 @@ struct ConnectionView: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 12)
                     .frame(height: 36)
-                    .background(LiquidGlassPanel(cornerRadius: 18))
+                    .sberGlassPanel(cornerRadius: 18, interactive: true)
                 }
                 .buttonStyle(RemotePressStyle())
                 Spacer()
@@ -451,13 +442,11 @@ struct ConnectionView: View {
             Spacer(minLength: 6)
 
             VStack(spacing: 12) {
-                ZStack {
-                    LiquidGlassCircle(highlighted: false, accent: true)
-                        .frame(width: 88, height: 88)
-                    Image(systemName: "tv.fill")
-                        .font(.system(size: 36, weight: .semibold))
-                        .foregroundStyle(.white)
-                }
+                Image(systemName: "tv.fill")
+                    .font(.system(size: 36, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 88, height: 88)
+                    .sberGlassCircle(highlighted: false, accent: true, interactive: false)
 
                 Text("Salute Remote+")
                     .font(.system(size: 29, weight: .bold, design: .rounded))
@@ -514,7 +503,7 @@ struct ConnectionView: View {
                                     .foregroundStyle(.white.opacity(0.42))
                             }
                             .padding(14)
-                            .background(LiquidGlassPanel(cornerRadius: 22))
+                            .sberGlassPanel(cornerRadius: 22, interactive: true)
                         }
                         .buttonStyle(RemotePressStyle())
                     }
@@ -552,7 +541,7 @@ struct StatusCard: View {
             }
         }
         .padding(15)
-        .background(LiquidGlassPanel(cornerRadius: 20))
+        .sberGlassPanel(cornerRadius: 20, interactive: false)
     }
 }
 
@@ -606,9 +595,9 @@ struct RemotePadView: View {
                         } label: {
                             Image(systemName: "square.grid.2x2.fill")
                                 .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.88))
+                                .foregroundStyle(.white.opacity(0.92))
                                 .frame(width: 38, height: 38)
-                                .background(LiquidGlassCircle())
+                                .sberGlassCircle()
                         }
                         .buttonStyle(RemotePressStyle())
                         .accessibilityLabel("Главное меню")
@@ -641,7 +630,7 @@ struct RemotePadView: View {
                                 .font(.system(size: 15, weight: .bold))
                                 .foregroundStyle(SberPalette.lime)
                                 .frame(width: 38, height: 38)
-                                .background(LiquidGlassCircle(highlighted: false, accent: false))
+                                .sberGlassCircle()
                         }
                         .buttonStyle(RemotePressStyle())
                         .accessibilityLabel("Глобальный поиск по ТВ")
@@ -655,7 +644,7 @@ struct RemotePadView: View {
                                     .font(.system(size: 15, weight: .semibold))
                                     .foregroundStyle(SberPalette.brightGreen)
                                     .frame(width: 38, height: 38)
-                                    .background(LiquidGlassCircle())
+                                    .sberGlassCircle()
                             }
                             .buttonStyle(RemotePressStyle())
                             .accessibilityLabel("Переподключить канал")
@@ -667,9 +656,9 @@ struct RemotePadView: View {
                         } label: {
                             Image(systemName: "link.badge.plus")
                                 .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.85))
+                                .foregroundStyle(.white.opacity(0.90))
                                 .frame(width: 38, height: 38)
-                                .background(LiquidGlassCircle())
+                                .sberGlassCircle()
                         }
                         .buttonStyle(RemotePressStyle())
                         .accessibilityLabel("Сменить телевизор")
@@ -734,40 +723,42 @@ struct RemotePadView: View {
                             Group {
                                 switch padMode {
                                 case .dpad:
-                                    VStack(spacing: dpadSpacing) {
-                                        DPadCircleButton(
-                                            symbol: "chevron.up",
-                                            size: dpadBtn,
-                                            onDown: { remote.sendDown(.up) },
-                                            onUp: { remote.sendUp(.up) }
-                                        )
-                                        HStack(spacing: dpadSpacing) {
+                                    NativeGlassContainer(spacing: dpadSpacing) {
+                                        VStack(spacing: dpadSpacing) {
                                             DPadCircleButton(
-                                                symbol: "chevron.left",
+                                                symbol: "chevron.up",
                                                 size: dpadBtn,
-                                                onDown: { remote.sendDown(.left) },
-                                                onUp: { remote.sendUp(.left) }
+                                                onDown: { remote.sendDown(.up) },
+                                                onUp: { remote.sendUp(.up) }
                                             )
+                                            HStack(spacing: dpadSpacing) {
+                                                DPadCircleButton(
+                                                    symbol: "chevron.left",
+                                                    size: dpadBtn,
+                                                    onDown: { remote.sendDown(.left) },
+                                                    onUp: { remote.sendUp(.left) }
+                                                )
+                                                DPadCircleButton(
+                                                    title: "OK",
+                                                    size: okBtn,
+                                                    accent: true,
+                                                    onDown: { remote.sendDown(.ok) },
+                                                    onUp: { remote.sendUp(.ok) }
+                                                )
+                                                DPadCircleButton(
+                                                    symbol: "chevron.right",
+                                                    size: dpadBtn,
+                                                    onDown: { remote.sendDown(.right) },
+                                                    onUp: { remote.sendUp(.right) }
+                                                )
+                                            }
                                             DPadCircleButton(
-                                                title: "OK",
-                                                size: okBtn,
-                                                accent: true,
-                                                onDown: { remote.sendDown(.ok) },
-                                                onUp: { remote.sendUp(.ok) }
-                                            )
-                                            DPadCircleButton(
-                                                symbol: "chevron.right",
+                                                symbol: "chevron.down",
                                                 size: dpadBtn,
-                                                onDown: { remote.sendDown(.right) },
-                                                onUp: { remote.sendUp(.right) }
+                                                onDown: { remote.sendDown(.down) },
+                                                onUp: { remote.sendUp(.down) }
                                             )
                                         }
-                                        DPadCircleButton(
-                                            symbol: "chevron.down",
-                                            size: dpadBtn,
-                                            onDown: { remote.sendDown(.down) },
-                                            onUp: { remote.sendUp(.down) }
-                                        )
                                     }
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -970,36 +961,12 @@ struct PowerRemoteButton: View {
         .foregroundStyle(isHoldingMenu ? .white : SberPalette.coral)
         .frame(maxWidth: .infinity)
         .frame(height: height)
-        .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(
-                        isHoldingMenu
-                            ? SberPalette.coral.opacity(0.84)
-                            : (isPressed ? SberPalette.coral.opacity(0.30) : SberPalette.coral.opacity(0.14))
-                    )
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(SberPalette.specularSheen)
-                    .opacity(0.55)
-            }
+        .nativeLiquidGlass(
+            in: RoundedRectangle(cornerRadius: 18, style: .continuous),
+            tint: SberPalette.coral.opacity(isHoldingMenu ? 0.78 : (isPressed ? 0.36 : 0.20)),
+            interactive: true
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [
-                            SberPalette.coral.opacity(isHoldingMenu ? 0.95 : 0.48),
-                            Color.white.opacity(0.12)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        )
-        .shadow(color: isHoldingMenu ? SberPalette.coral.opacity(0.35) : Color.black.opacity(0.25), radius: 8, y: 4)
+        .shadow(color: isHoldingMenu ? SberPalette.coral.opacity(0.35) : Color.black.opacity(0.20), radius: 8, y: 4)
         .scaleEffect(isPressed ? 0.95 : 1.0)
         .animation(.easeOut(duration: 0.12), value: isPressed)
         .animation(.easeOut(duration: 0.15), value: isHoldingMenu)
@@ -1522,11 +1489,10 @@ struct DPadCircleButton: View {
         .font(.system(size: title == nil ? 21 : 18, weight: .bold))
         .foregroundStyle(.white)
         .frame(width: size, height: size)
-        .background(
-            LiquidGlassCircle(
-                highlighted: isHolding || (isPressed && !accent),
-                accent: accent
-            )
+        .sberGlassCircle(
+            highlighted: isHolding || (isPressed && !accent),
+            accent: accent,
+            interactive: true
         )
         .overlay(
             Circle()
@@ -1607,7 +1573,7 @@ struct ActionRemoteButton: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: height)
-            .background(LiquidGlassPanel(cornerRadius: 18, highlighted: highlighted))
+            .sberGlassPanel(cornerRadius: 18, highlighted: highlighted, interactive: true)
         }
         .buttonStyle(RemotePressStyle())
     }

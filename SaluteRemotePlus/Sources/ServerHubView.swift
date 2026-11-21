@@ -99,22 +99,6 @@ struct ServerGlassPanel: View {
     var accentGlow: Color? = nil
 
     var body: some View {
-        #if compiler(>=6.2)
-        if #available(iOS 26.0, *) {
-            let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            let tintColor = (accentGlow ?? ServerPalette.dellBlue).opacity(0.16)
-            Color.clear
-                .glassEffect(.regular.tint(tintColor), in: shape)
-                .shadow(color: Color.black.opacity(0.32), radius: 14, y: 7)
-        } else {
-            legacyPanel
-        }
-        #else
-        legacyPanel
-        #endif
-    }
-
-    private var legacyPanel: some View {
         ZStack {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(.ultraThinMaterial)
@@ -144,24 +128,6 @@ struct ServerGlassCircle: View {
     var accent: Bool = false
 
     var body: some View {
-        #if compiler(>=6.2)
-        if #available(iOS 26.0, *) {
-            Color.clear
-                .glassEffect(
-                    accent
-                        ? .regular.tint(ServerPalette.dellBlue.opacity(0.62)).interactive()
-                        : .regular.tint(ServerPalette.iruCyan.opacity(0.10)).interactive(),
-                    in: Circle()
-                )
-        } else {
-            legacyCircle
-        }
-        #else
-        legacyCircle
-        #endif
-    }
-
-    private var legacyCircle: some View {
         ZStack {
             if accent {
                 Circle()

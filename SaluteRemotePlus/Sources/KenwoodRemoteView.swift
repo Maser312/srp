@@ -117,24 +117,6 @@ struct KenwoodGlassPanel: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        #if compiler(>=6.2)
-        if #available(iOS 26.0, *) {
-            Color.clear
-                .glassEffect(
-                    highlighted
-                        ? .regular.tint(KenwoodPalette.crimson.opacity(0.72))
-                        : .regular.tint((accentGlow ?? KenwoodPalette.crimson).opacity(0.08)),
-                    in: shape
-                )
-        } else {
-            legacyBody(shape: shape)
-        }
-        #else
-        legacyBody(shape: shape)
-        #endif
-    }
-
-    private func legacyBody(shape: RoundedRectangle) -> some View {
         ZStack {
             shape.fill(.ultraThinMaterial)
 
@@ -170,24 +152,6 @@ struct KenwoodGlassCircle: View {
     var accent: Bool = false
 
     var body: some View {
-        #if compiler(>=6.2)
-        if #available(iOS 26.0, *) {
-            Color.clear
-                .glassEffect(
-                    (accent || highlighted)
-                        ? .regular.tint(KenwoodPalette.crimson.opacity(accent ? 0.80 : 0.55)).interactive()
-                        : .regular.interactive(),
-                    in: Circle()
-                )
-        } else {
-            legacyBody
-        }
-        #else
-        legacyBody
-        #endif
-    }
-
-    private var legacyBody: some View {
         ZStack {
             Circle().fill(.ultraThinMaterial)
 
@@ -218,48 +182,103 @@ struct KenwoodGlassCircle: View {
     }
 }
 
+private extension View {
+    @ViewBuilder
+    func kenwoodGlassPanel(
+        cornerRadius: CGFloat = 22,
+        highlighted: Bool = false,
+        interactive: Bool = true
+    ) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            let tint = highlighted
+                ? KenwoodPalette.crimson.opacity(0.72)
+                : KenwoodPalette.crimson.opacity(0.08)
+            if interactive {
+                self.glassEffect(.regular.tint(tint).interactive(), in: shape)
+            } else {
+                self.glassEffect(.regular.tint(tint), in: shape)
+            }
+        } else {
+            self.background(KenwoodGlassPanel(cornerRadius: cornerRadius, highlighted: highlighted))
+        }
+        #else
+        self.background(KenwoodGlassPanel(cornerRadius: cornerRadius, highlighted: highlighted))
+        #endif
+    }
+
+    @ViewBuilder
+    func kenwoodGlassCircle(
+        highlighted: Bool = false,
+        accent: Bool = false,
+        interactive: Bool = true
+    ) -> some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            if accent || highlighted {
+                let tint = KenwoodPalette.crimson.opacity(accent ? 0.78 : 0.55)
+                if interactive {
+                    self.glassEffect(.regular.tint(tint).interactive(), in: Circle())
+                } else {
+                    self.glassEffect(.regular.tint(tint), in: Circle())
+                }
+            } else {
+                if interactive {
+                    self.glassEffect(.regular.interactive(), in: Circle())
+                } else {
+                    self.glassEffect(.regular, in: Circle())
+                }
+            }
+        } else {
+            self.background(KenwoodGlassCircle(highlighted: highlighted, accent: accent))
+        }
+        #else
+        self.background(KenwoodGlassCircle(highlighted: highlighted, accent: accent))
+        #endif
+    }
+}
+
 struct KenwoodPrimaryButtonStyle: ButtonStyle {
     var disabled: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
         let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
-        configuration.label
-            .foregroundStyle(.white.opacity(disabled ? 0.45 : 1.0))
-            .background(primaryBackground(shape: shape))
-            .shadow(color: disabled ? .clear : KenwoodPalette.crimson.opacity(0.36), radius: 10, y: 4)
-            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
-    }
-
-    @ViewBuilder
-    private func primaryBackground(shape: RoundedRectangle) -> some View {
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
-            Color.clear
+            configuration.label
+                .foregroundStyle(.white.opacity(disabled ? 0.45 : 1.0))
                 .glassEffect(
-                    .regular.tint(KenwoodPalette.crimson.opacity(disabled ? 0.25 : 0.78)).interactive(),
+                    .regular.tint(KenwoodPalette.crimson.opacity(disabled ? 0.25 : 0.78)).interactive(!disabled),
                     in: shape
                 )
         } else {
-            legacyPrimaryBackground(shape: shape)
+            legacyBody(configuration: configuration, shape: shape)
         }
         #else
-        legacyPrimaryBackground(shape: shape)
+        legacyBody(configuration: configuration, shape: shape)
         #endif
     }
 
-    private func legacyPrimaryBackground(shape: RoundedRectangle) -> some View {
-        ZStack {
-            shape
-                .fill(KenwoodPalette.accentButtonGradient)
-                .opacity(disabled ? 0.25 : 1.0)
-            shape
-                .fill(KenwoodPalette.specularSheen)
-                .opacity(disabled ? 0.2 : 0.7)
-            shape
-                .strokeBorder(KenwoodPalette.glassAccentBorder, lineWidth: 1)
-                .opacity(disabled ? 0.3 : 0.95)
-        }
+    private func legacyBody(configuration: Configuration, shape: RoundedRectangle) -> some View {
+        configuration.label
+            .foregroundStyle(.white.opacity(disabled ? 0.45 : 1.0))
+            .background(
+                ZStack {
+                    shape
+                        .fill(KenwoodPalette.accentButtonGradient)
+                        .opacity(disabled ? 0.25 : 1.0)
+                    shape
+                        .fill(KenwoodPalette.specularSheen)
+                        .opacity(disabled ? 0.2 : 0.7)
+                    shape
+                        .strokeBorder(KenwoodPalette.glassAccentBorder, lineWidth: 1)
+                        .opacity(disabled ? 0.3 : 0.95)
+                }
+            )
+            .shadow(color: disabled ? .clear : KenwoodPalette.crimson.opacity(0.36), radius: 10, y: 4)
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
@@ -267,6 +286,21 @@ struct KenwoodGlassButtonStyle: ButtonStyle {
     var disabled: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            configuration.label
+                .foregroundStyle(.white.opacity(disabled ? 0.40 : 0.94))
+                .glassEffect(.regular.interactive(!disabled), in: shape)
+        } else {
+            legacyBody(configuration: configuration)
+        }
+        #else
+        legacyBody(configuration: configuration)
+        #endif
+    }
+
+    private func legacyBody(configuration: Configuration) -> some View {
         configuration.label
             .foregroundStyle(.white.opacity(disabled ? 0.40 : 0.94))
             .background(KenwoodGlassPanel(cornerRadius: 18, highlighted: configuration.isPressed))
@@ -346,78 +380,80 @@ struct KenwoodRemoteView: View {
 
             VStack(spacing: 0) {
                 // Верхняя панель с фирменным знаком KENWOOD
-                HStack(spacing: 10) {
-                    Button {
-                        Haptics.tap()
-                        onBackToMenu()
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 13, weight: .bold))
-                            Text("Меню")
-                                .font(.subheadline.weight(.semibold))
+                NativeGlassContainer(spacing: 8) {
+                    HStack(spacing: 10) {
+                        Button {
+                            Haptics.tap()
+                            onBackToMenu()
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 13, weight: .bold))
+                                Text("Меню")
+                                    .font(.subheadline.weight(.semibold))
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12)
+                            .frame(height: 36)
+                            .kenwoodGlassPanel(cornerRadius: 18, interactive: true)
                         }
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .frame(height: 36)
-                        .background(KenwoodGlassPanel(cornerRadius: 18))
-                    }
-                    .buttonStyle(RemotePressStyle())
+                        .buttonStyle(RemotePressStyle())
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 5) {
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 9, weight: .black))
-                                .foregroundStyle(KenwoodPalette.neonRed)
-                                .rotationEffect(.degrees(-90))
-                            Text((kenwood.connectedDeviceName ?? "KENWOOD").uppercased())
-                                .font(.system(size: 17, weight: .black, design: .rounded))
-                                .foregroundStyle(.white)
-                                .lineLimit(1)
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 5) {
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 9, weight: .black))
+                                    .foregroundStyle(KenwoodPalette.neonRed)
+                                    .rotationEffect(.degrees(-90))
+                                Text((kenwood.connectedDeviceName ?? "KENWOOD").uppercased())
+                                    .font(.system(size: 17, weight: .black, design: .rounded))
+                                    .foregroundStyle(.white)
+                                    .lineLimit(1)
+                            }
+                            HStack(spacing: 5) {
+                                Circle()
+                                    .fill(kenwood.isConnected ? KenwoodPalette.cyan : KenwoodPalette.amber)
+                                    .frame(width: 7, height: 7)
+                                    .shadow(color: (kenwood.isConnected ? KenwoodPalette.cyan : KenwoodPalette.amber).opacity(0.85), radius: 4)
+                                Text(kenwood.isConnected ? (kenwood.activeTransportLabel ?? "OpenLink готов") : "Нажмите для подключения")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(kenwood.isConnected ? KenwoodPalette.iceBlue : .white.opacity(0.58))
+                                    .lineLimit(1)
+                            }
                         }
-                        HStack(spacing: 5) {
-                            Circle()
-                                .fill(kenwood.isConnected ? KenwoodPalette.cyan : KenwoodPalette.amber)
-                                .frame(width: 7, height: 7)
-                                .shadow(color: (kenwood.isConnected ? KenwoodPalette.cyan : KenwoodPalette.amber).opacity(0.85), radius: 4)
-                            Text(kenwood.isConnected ? (kenwood.activeTransportLabel ?? "OpenLink готов") : "Нажмите для подключения")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(kenwood.isConnected ? KenwoodPalette.iceBlue : .white.opacity(0.58))
-                                .lineLimit(1)
+                        .onTapGesture {
+                            Haptics.tap()
+                            showConnectionSheet = true
                         }
-                    }
-                    .onTapGesture {
-                        Haptics.tap()
-                        showConnectionSheet = true
-                    }
 
-                    Spacer()
+                        Spacer()
 
-                    Button {
-                        Haptics.tap()
-                        kenwood.toggleMute()
-                    } label: {
-                        Text("ATT")
-                            .font(.system(size: 11, weight: .black, design: .rounded))
-                            .foregroundStyle(kenwood.isMuted ? .white : KenwoodPalette.neonRed)
-                            .frame(width: 40, height: 36)
-                            .background(KenwoodGlassPanel(cornerRadius: 18, highlighted: kenwood.isMuted))
-                    }
-                    .buttonStyle(RemotePressStyle())
-                    .accessibilityLabel("ATT / Приглушить звук")
+                        Button {
+                            Haptics.tap()
+                            kenwood.toggleMute()
+                        } label: {
+                            Text("ATT")
+                                .font(.system(size: 11, weight: .black, design: .rounded))
+                                .foregroundStyle(kenwood.isMuted ? .white : KenwoodPalette.neonRed)
+                                .frame(width: 40, height: 36)
+                                .kenwoodGlassPanel(cornerRadius: 18, highlighted: kenwood.isMuted, interactive: true)
+                        }
+                        .buttonStyle(RemotePressStyle())
+                        .accessibilityLabel("ATT / Приглушить звук")
 
-                    Button {
-                        Haptics.tap()
-                        showConnectionSheet = true
-                    } label: {
-                        Image(systemName: "antenna.radiowaves.left.and.right")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(kenwood.isConnected ? KenwoodPalette.cyan : .white.opacity(0.85))
-                            .frame(width: 36, height: 36)
-                            .background(KenwoodGlassCircle(highlighted: kenwood.isConnected))
+                        Button {
+                            Haptics.tap()
+                            showConnectionSheet = true
+                        } label: {
+                            Image(systemName: "antenna.radiowaves.left.and.right")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(kenwood.isConnected ? KenwoodPalette.cyan : .white.opacity(0.90))
+                                .frame(width: 36, height: 36)
+                                .kenwoodGlassCircle(highlighted: kenwood.isConnected, interactive: true)
+                        }
+                        .buttonStyle(RemotePressStyle())
+                        .accessibilityLabel("Подключение Bluetooth к Kenwood")
                     }
-                    .buttonStyle(RemotePressStyle())
-                    .accessibilityLabel("Подключение Bluetooth к Kenwood")
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)

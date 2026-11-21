@@ -471,7 +471,7 @@ private struct AirMouseTriggerButton: View {
         }
         .foregroundStyle(.white)
         .frame(width: 82, height: 82)
-        .background(LiquidGlassCircle(highlighted: isPressed, accent: !isPaused))
+        .sberGlassCircle(highlighted: isPressed, accent: !isPaused, interactive: true)
         .scaleEffect(isPressed ? 0.92 : 1.0)
         .animation(.easeOut(duration: 0.1), value: isPressed)
         .contentShape(Circle())
