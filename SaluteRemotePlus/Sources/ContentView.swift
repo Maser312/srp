@@ -74,12 +74,7 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            if section == .tvRemote && remote.isShowingRemotePad {
-                Color(red: 0.02, green: 0.02, blue: 0.025)
-                    .ignoresSafeArea()
-            } else {
-                SberLiquidBackdrop()
-            }
+            NativeDarkBackdrop()
 
             switch section {
             case .home:
@@ -90,64 +85,64 @@ struct ContentView: View {
                     onOpenTVRemote: {
                         Haptics.medium()
                         remote.resume()
-                        withAnimation(.easeInOut(duration: 0.22)) {
+                        withAnimation(NativeLiquidSpring.morph) {
                             section = .tvRemote
                         }
                     },
                     onOpenKenwood: {
                         Haptics.medium()
                         kenwood.start()
-                        withAnimation(.easeInOut(duration: 0.22)) {
+                        withAnimation(NativeLiquidSpring.morph) {
                             section = .kenwood
                         }
                     },
                     onOpenServers: {
                         Haptics.medium()
                         serverManager.startMonitoring()
-                        withAnimation(.easeInOut(duration: 0.22)) {
+                        withAnimation(NativeLiquidSpring.morph) {
                             section = .servers
                         }
                     }
                 )
-                .transition(.opacity)
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
 
             case .tvRemote:
                 Group {
                     if remote.isShowingRemotePad {
                         RemotePadView(remote: remote) {
                             remote.pause()
-                            withAnimation(.easeInOut(duration: 0.22)) {
+                            withAnimation(NativeLiquidSpring.morph) {
                                 section = .home
                             }
                         }
                     } else {
                         TVHubConnectionView(remote: remote, isPresentedAsSheet: false) {
                             remote.pause()
-                            withAnimation(.easeInOut(duration: 0.22)) {
+                            withAnimation(NativeLiquidSpring.morph) {
                                 section = .home
                             }
                         }
                     }
                 }
-                .transition(.opacity)
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
 
             case .kenwood:
                 KenwoodRemoteView(kenwood: kenwood) {
                     kenwood.stopScanning()
-                    withAnimation(.easeInOut(duration: 0.22)) {
+                    withAnimation(NativeLiquidSpring.morph) {
                         section = .home
                     }
                 }
-                .transition(.opacity)
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
 
             case .servers:
                 ServerHubView(manager: serverManager) {
                     serverManager.stopNetworkScan()
-                    withAnimation(.easeInOut(duration: 0.22)) {
+                    withAnimation(NativeLiquidSpring.morph) {
                         section = .home
                     }
                 }
-                .transition(.opacity)
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
         }
         .preferredColorScheme(.dark)
@@ -259,20 +254,21 @@ struct SuperAppHomeView: View {
             VStack(spacing: 22) {
                 Spacer(minLength: 14)
 
-                VStack(spacing: 10) {
-                    Image(systemName: "dot.radiowaves.left.and.right")
-                        .font(.system(size: 33, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 80, height: 80)
-                        .sberGlassCircle(highlighted: false, accent: true, interactive: false)
+                VStack(spacing: 12) {
+                    RemoteAMonogramEmblem()
+                        .frame(width: 78, height: 78)
+                        .nativeLiquidGlass(
+                            in: RoundedRectangle(cornerRadius: 24, style: .continuous),
+                            interactive: true
+                        )
 
-                    Text("Salute Remote+")
-                        .font(.system(size: 29, weight: .bold, design: .rounded))
-                        .foregroundStyle(SberPalette.brandGradient)
+                    Text("RemoteA")
+                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
 
                     Text("Выберите раздел управления")
                         .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.60))
+                        .foregroundStyle(.white.opacity(0.56))
                 }
 
                 NativeGlassContainer(spacing: 14) {
@@ -320,6 +316,33 @@ struct SuperAppHomeView: View {
     }
 }
 
+/// Минималистичная эмблема RemoteA (перекликается с иконкой приложения: буква A, центральная кнопка и дуга сигнала).
+private struct RemoteAMonogramEmblem: View {
+    var body: some View {
+        ZStack {
+            // Тонкая дуга беспроводного сигнала над вершиной
+            Circle()
+                .trim(from: 0.67, to: 0.83)
+                .stroke(Color.white.opacity(0.75), style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                .frame(width: 48, height: 48)
+                .offset(y: -4)
+
+            // Чистый геометрический силуэт A
+            Text("A")
+                .font(.system(size: 36, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .offset(y: 4)
+
+            // Минималистичная круглая точка-кнопка в центре перекладины
+            Circle()
+                .fill(.white)
+                .frame(width: 7, height: 7)
+                .offset(y: 12)
+        }
+        .accessibilityHidden(true)
+    }
+}
+
 private struct SuperAppMenuCard: View {
     let symbol: String
     let title: String
@@ -330,23 +353,7 @@ private struct SuperAppMenuCard: View {
     var theme: SuperAppCardTheme = .sber
     let action: () -> Void
 
-    private var iconGradient: LinearGradient {
-        switch theme {
-        case .sber: return SberPalette.accentButtonGradient
-        case .kenwood: return KenwoodPalette.accentButtonGradient
-        case .server: return ServerPalette.accentButtonGradient
-        }
-    }
-
-    private var accentBorder: LinearGradient {
-        switch theme {
-        case .sber: return SberPalette.glassAccentBorder
-        case .kenwood: return KenwoodPalette.glassAccentBorder
-        case .server: return ServerPalette.glassAccentBorder
-        }
-    }
-
-    private var glowColor: Color {
+    private var accentColor: Color {
         switch theme {
         case .sber: return SberPalette.brightGreen
         case .kenwood: return KenwoodPalette.crimson
@@ -357,29 +364,15 @@ private struct SuperAppMenuCard: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 15) {
-                ZStack {
-                    if accentIcon {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(iconGradient)
-                            .opacity(0.92)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .strokeBorder(accentBorder, lineWidth: 1)
-                            )
-                    } else {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color.white.opacity(0.08))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .strokeBorder(SberPalette.glassBorderGradient, lineWidth: 1)
-                            )
-                    }
-                    Image(systemName: symbol)
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(accentIcon ? .white : .white.opacity(0.65))
-                }
-                .frame(width: 54, height: 54)
-                .shadow(color: accentIcon ? glowColor.opacity(0.34) : .clear, radius: 8, y: 3)
+                Image(systemName: symbol)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(accentIcon ? .white : .white.opacity(0.65))
+                    .frame(width: 54, height: 54)
+                    .nativeLiquidGlass(
+                        in: RoundedRectangle(cornerRadius: 16, style: .continuous),
+                        tint: accentIcon ? accentColor.opacity(0.55) : nil,
+                        interactive: false
+                    )
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
@@ -390,16 +383,13 @@ private struct SuperAppMenuCard: View {
                         if let badgeText {
                             Text(badgeText)
                                 .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(badgeActive ? (theme == .sber ? SberPalette.bgTop : .white) : .white.opacity(0.75))
+                                .foregroundStyle(.white.opacity(badgeActive ? 0.98 : 0.78))
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
-                                .background(
-                                    Capsule()
-                                        .fill(
-                                            badgeActive
-                                                ? AnyShapeStyle(theme == .sber ? SberPalette.brandGradient : iconGradient)
-                                                : AnyShapeStyle(Color.white.opacity(0.12))
-                                        )
+                                .nativeLiquidGlass(
+                                    in: Capsule(),
+                                    tint: badgeActive ? accentColor.opacity(0.52) : nil,
+                                    interactive: false
                                 )
                         }
                     }
@@ -415,12 +405,11 @@ private struct SuperAppMenuCard: View {
 
                 Image(systemName: "chevron.right")
                     .font(.footnote.weight(.bold))
-                    .foregroundStyle(.white.opacity(0.40))
+                    .foregroundStyle(.white.opacity(0.42))
             }
             .padding(16)
             .nativeLiquidGlass(
                 in: RoundedRectangle(cornerRadius: 24, style: .continuous),
-                tint: glowColor.opacity(0.12),
                 interactive: true
             )
         }
@@ -435,6 +424,7 @@ struct RemotePadView: View {
     let onBackToMenu: () -> Void
 
     @Environment(\.scenePhase) private var scenePhase
+    @Namespace private var padMorphNamespace
     @AppStorage("SaluteRemotePlus.padMode") private var storedPadModeRaw = CenterPadMode.dpad.rawValue
     @AppStorage("SaluteRemotePlus.hardwareVolumeEnabled") private var hardwareVolumeEnabled = true
     @State private var showTextSheet = false
@@ -457,7 +447,7 @@ struct RemotePadView: View {
     private func selectPadMode(_ next: CenterPadMode) {
         guard remote.availablePadModes.contains(next), next != padMode else { return }
         Haptics.medium()
-        withAnimation(.spring(response: 0.24, dampingFraction: 0.86)) {
+        withAnimation(NativeLiquidSpring.morph) {
             storedPadModeRaw = next.rawValue
         }
         remote.setControllerMode(next.wireMode)
@@ -482,305 +472,321 @@ struct RemotePadView: View {
             let cellHeight: CGFloat = min(max(h * 0.072, 50), 62)
 
             VStack(spacing: compact ? 12 : 16) {
-                // 1. Верхняя панель: [Питание] [Имя ТВ ⌄]     [Режим] [Закрыть]
-                HStack(spacing: 12) {
-                    CircularPowerButton(
-                        isActive: remote.isChannelReady,
-                        onDown: { remote.sendDown(.power) },
-                        onUp: { remote.sendUp(.power) }
-                    )
+                // 1. Верхняя панель Liquid Glass: [Питание] [Имя ТВ ⌄]     [Режим] [Закрыть]
+                NativeGlassContainer(spacing: 10) {
+                    HStack(spacing: 10) {
+                        CircularPowerButton(
+                            isActive: remote.isChannelReady,
+                            onDown: { remote.sendDown(.power) },
+                            onUp: { remote.sendUp(.power) }
+                        )
 
-                    Menu {
-                        if !remote.savedTVs.isEmpty {
-                            Section("Мои телевизоры") {
-                                ForEach(remote.savedTVs) { profile in
-                                    Button {
-                                        Haptics.tap()
-                                        remote.switchToProfile(profile)
-                                    } label: {
-                                        if remote.activeProfile?.id == profile.id {
-                                            Label("\(profile.name) (\(profile.platform.shortBadge))", systemImage: "checkmark")
-                                        } else {
-                                            Label("\(profile.name) (\(profile.platform.shortBadge))", systemImage: profile.platform.symbol)
+                        Menu {
+                            if !remote.savedTVs.isEmpty {
+                                Section("Мои телевизоры") {
+                                    ForEach(remote.savedTVs) { profile in
+                                        Button {
+                                            Haptics.tap()
+                                            remote.switchToProfile(profile)
+                                        } label: {
+                                            if remote.activeProfile?.id == profile.id {
+                                                Label("\(profile.name) (\(profile.platform.shortBadge))", systemImage: "checkmark")
+                                            } else {
+                                                Label("\(profile.name) (\(profile.platform.shortBadge))", systemImage: profile.platform.symbol)
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
 
-                        if !remote.isChannelReady {
-                            Button {
-                                Haptics.tap()
-                                remote.reconnectActiveTV()
-                            } label: {
-                                Label("Переподключить", systemImage: "arrow.clockwise")
-                            }
-                        }
-
-                        if remote.activePlatform.supportsFindRemote {
-                            Button {
-                                Haptics.tap()
-                                remote.findRemote()
-                            } label: {
-                                Label("Найти физический пульт", systemImage: "dot.radiowaves.left.and.right")
-                            }
-                        }
-
-                        Button {
-                            Haptics.tap()
-                            hardwareVolumeEnabled.toggle()
-                        } label: {
-                            Label(
-                                "Кнопки громкости iPhone",
-                                systemImage: hardwareVolumeEnabled ? "checkmark.circle.fill" : "circle"
-                            )
-                        }
-
-                        Divider()
-
-                        Button {
-                            Haptics.tap()
-                            showTVHubSheet = true
-                        } label: {
-                            Label("Все телевизоры / Добавить ТВ…", systemImage: "plus.circle")
-                        }
-                    } label: {
-                        HStack(spacing: 5) {
-                            Text(remote.activeDeviceName)
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .lineLimit(1)
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.75))
-                        }
-                        .padding(.vertical, 6)
-                        .contentShape(Rectangle())
-                    }
-
-                    Spacer()
-
-                    // Кнопка переключения режима (тап — следующий режим, удержание — меню выбора)
-                    Menu {
-                        ForEach(remote.availablePadModes) { mode in
-                            Button {
-                                selectPadMode(mode)
-                            } label: {
-                                if mode == padMode {
-                                    Label(mode.title, systemImage: "checkmark")
-                                } else {
-                                    Label(mode.title, systemImage: mode.symbol)
+                            if !remote.isChannelReady {
+                                Button {
+                                    Haptics.tap()
+                                    remote.reconnectActiveTV()
+                                } label: {
+                                    Label("Переподключить", systemImage: "arrow.clockwise")
                                 }
                             }
-                        }
-                    } label: {
-                        Image(systemName: padMode.symbol)
-                            .font(.system(size: 18, weight: .regular))
-                            .foregroundStyle(.white)
-                            .frame(width: 44, height: 44)
-                            .background(Circle().fill(Color(white: 0.145)))
-                    } primaryAction: {
-                        cyclePadMode()
-                    }
-                    .accessibilityLabel("Режим пульта: \(padMode.title)")
 
-                    // Кнопка закрытия виртуального пульта (возврат в главное меню)
-                    Button {
-                        Haptics.tap()
-                        onBackToMenu()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 17, weight: .medium))
-                            .foregroundStyle(.white)
-                            .frame(width: 44, height: 44)
-                            .background(Circle().fill(Color(white: 0.145)))
+                            if remote.activePlatform.supportsFindRemote {
+                                Button {
+                                    Haptics.tap()
+                                    remote.findRemote()
+                                } label: {
+                                    Label("Найти физический пульт", systemImage: "dot.radiowaves.left.and.right")
+                                }
+                            }
+
+                            Button {
+                                Haptics.tap()
+                                hardwareVolumeEnabled.toggle()
+                            } label: {
+                                Label(
+                                    "Кнопки громкости iPhone",
+                                    systemImage: hardwareVolumeEnabled ? "checkmark.circle.fill" : "circle"
+                                )
+                            }
+
+                            Divider()
+
+                            Button {
+                                Haptics.tap()
+                                showTVHubSheet = true
+                            } label: {
+                                Label("Все телевизоры / Добавить ТВ…", systemImage: "plus.circle")
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text(remote.activeDeviceName)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                    .lineLimit(1)
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.72))
+                            }
+                            .padding(.horizontal, 14)
+                            .frame(height: 44)
+                            .nativeLiquidGlass(in: Capsule(), interactive: true)
+                        }
+
+                        Spacer(minLength: 4)
+
+                        // Кнопка переключения режима (тап — следующий режим, удержание — меню выбора)
+                        Menu {
+                            ForEach(remote.availablePadModes) { mode in
+                                Button {
+                                    selectPadMode(mode)
+                                } label: {
+                                    if mode == padMode {
+                                        Label(mode.title, systemImage: "checkmark")
+                                    } else {
+                                        Label(mode.title, systemImage: mode.symbol)
+                                    }
+                                }
+                            }
+                        } label: {
+                            Image(systemName: padMode.symbol)
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundStyle(.white)
+                                .nativeSymbolReplaceTransition()
+                                .frame(width: 44, height: 44)
+                                .nativeLiquidGlass(in: Circle(), interactive: true)
+                        } primaryAction: {
+                            cyclePadMode()
+                        }
+                        .accessibilityLabel("Режим пульта: \(padMode.title)")
+
+                        // Кнопка закрытия виртуального пульта (возврат в главное меню)
+                        Button {
+                            Haptics.tap()
+                            onBackToMenu()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 44, height: 44)
+                                .nativeLiquidGlass(in: Circle(), interactive: true)
+                        }
+                        .buttonStyle(RemotePressStyle())
+                        .accessibilityLabel("Закрыть виртуальный пульт")
                     }
-                    .buttonStyle(RemotePressStyle())
-                    .accessibilityLabel("Закрыть виртуальный пульт")
                 }
 
                 // 2. Строка поиска (без кнопок запуска сервисов) + компактный статус платформы
-                HStack(spacing: 10) {
-                    Button {
-                        Haptics.tap()
-                        showTextSheet = true
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "magnifyingglass")
-                                .font(.system(size: 16, weight: .medium))
-                            Text("Поиск")
-                                .font(.system(size: 16, weight: .medium))
-                        }
-                        .foregroundStyle(.white.opacity(0.94))
-                        .padding(.horizontal, 18)
-                        .frame(height: 44)
-                        .background(
-                            Capsule().fill(Color(white: 0.14))
-                        )
-                    }
-                    .buttonStyle(RemotePressStyle())
-
-                    Spacer()
-
-                    Button {
-                        Haptics.tap()
-                        if !remote.isChannelReady {
-                            remote.reconnectActiveTV()
-                        } else {
-                            showTVHubSheet = true
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(remote.isChannelReady ? remote.activePlatform.accentColor : Color.orange)
-                                .frame(width: 7, height: 7)
-                            Text(remote.isChannelReady ? remote.activePlatform.shortBadge : remote.statusText)
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.white.opacity(0.72))
-                                .lineLimit(1)
-                        }
-                        .padding(.horizontal, 12)
-                        .frame(height: 34)
-                        .background(
-                            Capsule().fill(Color(white: 0.10))
-                        )
-                    }
-                    .buttonStyle(RemotePressStyle())
-                }
-
-                // 3. Центральная область управления (4 точных режима по референсам)
-                Group {
-                    switch padMode {
-                    case .dpad:
-                        ConcentricDPadRingView(
-                            diameter: min(w - 64, max(h * 0.34, 224), 278),
-                            onDown: { remote.sendDown($0) },
-                            onUp: { remote.sendUp($0) }
-                        )
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                    case .gestures:
-                        TouchpadSurfaceView(
-                            onCommand: { remote.send($0) },
-                            onDown: { remote.sendDown($0) },
-                            onUp: { remote.sendUp($0) }
-                        )
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                    case .airMouse:
-                        AirMouseSurfaceView(
-                            onMove: { dx, dy in remote.sendMouseOffset(dx: dx, dy: dy) },
-                            onVerticalScroll: { remote.sendMouseVerticalScroll($0) },
-                            onHorizontalScroll: { remote.sendMouseHorizontalScroll($0) },
-                            onClickDown: { remote.sendDown(.mouseClick) },
-                            onClickUp: { remote.sendUp(.mouseClick) }
-                        )
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                    case .trackpad:
-                        TrackpadSurfaceView(
-                            onMove: { dx, dy in remote.sendMouseOffset(dx: dx, dy: dy) },
-                            onVerticalScroll: { remote.sendMouseVerticalScroll($0) },
-                            onHorizontalScroll: { remote.sendMouseHorizontalScroll($0) },
-                            onClick: { remote.send(.mouseClick) },
-                            onClickDown: { remote.sendDown(.mouseClick) },
-                            onClickUp: { remote.sendUp(.mouseClick) }
-                        )
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-                }
-
-                // 4. Нижний блок кнопок 3×3 (точная сетка из референса: высокий «Назад», Ассистент, VOL+, VOL-, Домой, TV, Настройки, Mute)
-                HStack(spacing: gridSpacing) {
-                    // Колонка 1: Высокая «Назад» (2 строки) + «Без звука» (1 строка)
-                    VStack(spacing: gridSpacing) {
-                        MinimalRemoteKeyButton(
-                            height: cellHeight * 2 + gridSpacing,
-                            accessibilityTitle: "Назад"
-                        ) {
-                            Image(systemName: "arrow.uturn.backward")
-                                .font(.system(size: 20, weight: .medium))
-                        } action: {
-                            send(.back)
-                        }
-
-                        MinimalRemoteKeyButton(
-                            height: cellHeight,
-                            accessibilityTitle: "Отключить звук"
-                        ) {
-                            Image(systemName: "speaker.slash")
-                                .font(.system(size: 20, weight: .regular))
-                        } action: {
-                            send(.mute)
-                        }
-                    }
-
-                    // Колонка 2: Виртуальный ассистент + VOL + + VOL -
-                    VStack(spacing: gridSpacing) {
-                        MinimalRemoteKeyButton(
-                            height: cellHeight,
-                            highlighted: remote.voiceState != .idle,
-                            highlightTint: remote.activePlatform.accentColor,
-                            accessibilityTitle: "Виртуальный ассистент (\(remote.activePlatform.voiceTitle))"
-                        ) {
-                            AssistantGlyph(
-                                platform: remote.activePlatform,
-                                isListening: remote.voiceState != .idle
-                            )
-                        } action: {
+                NativeGlassContainer(spacing: 10) {
+                    HStack(spacing: 10) {
+                        Button {
                             Haptics.tap()
-                            remote.toggleVoice()
-                        }
-
-                        MinimalHoldRemoteKeyButton(
-                            height: cellHeight,
-                            title: "VOL +",
-                            onDown: { remote.sendDown(.volumeUp) },
-                            onUp: { remote.sendUp(.volumeUp) }
-                        )
-
-                        MinimalHoldRemoteKeyButton(
-                            height: cellHeight,
-                            title: "VOL -",
-                            onDown: { remote.sendDown(.volumeDown) },
-                            onUp: { remote.sendUp(.volumeDown) }
-                        )
-                    }
-
-                    // Колонка 3: Домой + TV + Настройки
-                    VStack(spacing: gridSpacing) {
-                        MinimalRemoteKeyButton(
-                            height: cellHeight,
-                            accessibilityTitle: "Домашний экран"
-                        ) {
-                            Image(systemName: "house")
-                                .font(.system(size: 20, weight: .regular))
-                        } action: {
-                            send(.home)
-                        }
-
-                        MinimalRemoteKeyButton(
-                            height: cellHeight,
-                            accessibilityTitle: "Телеканалы / Вход (удержание — Пауза/Плей)",
-                            onLongPress: {
-                                Haptics.medium()
-                                remote.send(.playPause)
+                            showTextSheet = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 15, weight: .semibold))
+                                Text("Поиск")
+                                    .font(.system(size: 16, weight: .medium))
                             }
-                        ) {
-                            Text("TV")
-                                .font(.system(size: 17, weight: .semibold))
-                        } action: {
-                            send(.source)
+                            .foregroundStyle(.white.opacity(0.95))
+                            .padding(.horizontal, 18)
+                            .frame(height: 44)
+                            .nativeLiquidGlass(in: Capsule(), interactive: true)
+                        }
+                        .buttonStyle(RemotePressStyle())
+
+                        Spacer()
+
+                        Button {
+                            Haptics.tap()
+                            if !remote.isChannelReady {
+                                remote.reconnectActiveTV()
+                            } else {
+                                showTVHubSheet = true
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(remote.isChannelReady ? remote.activePlatform.accentColor : Color.orange)
+                                    .frame(width: 7, height: 7)
+                                Text(remote.isChannelReady ? remote.activePlatform.shortBadge : remote.statusText)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.white.opacity(0.84))
+                                    .lineLimit(1)
+                            }
+                            .padding(.horizontal, 13)
+                            .frame(height: 36)
+                            .nativeLiquidGlass(
+                                in: Capsule(),
+                                tint: remote.isChannelReady ? remote.activePlatform.accentColor.opacity(0.22) : Color.orange.opacity(0.22),
+                                interactive: true
+                            )
+                        }
+                        .buttonStyle(RemotePressStyle())
+                    }
+                }
+
+                // 3. Центральная область управления с нативным Liquid Glass морфингом режимов
+                NativeGlassContainer(spacing: 16) {
+                    ZStack {
+                        switch padMode {
+                        case .dpad:
+                            ConcentricDPadRingView(
+                                diameter: min(w - 64, max(h * 0.34, 224), 278),
+                                onDown: { remote.sendDown($0) },
+                                onUp: { remote.sendUp($0) }
+                            )
+                            .nativeGlassID("centerPad", in: padMorphNamespace)
+                            .transition(.scale(scale: 0.92).combined(with: .opacity))
+
+                        case .gestures:
+                            TouchpadSurfaceView(
+                                onCommand: { remote.send($0) },
+                                onDown: { remote.sendDown($0) },
+                                onUp: { remote.sendUp($0) }
+                            )
+                            .nativeGlassID("centerPad", in: padMorphNamespace)
+                            .transition(.scale(scale: 0.94).combined(with: .opacity))
+
+                        case .airMouse:
+                            AirMouseSurfaceView(
+                                onMove: { dx, dy in remote.sendMouseOffset(dx: dx, dy: dy) },
+                                onVerticalScroll: { remote.sendMouseVerticalScroll($0) },
+                                onHorizontalScroll: { remote.sendMouseHorizontalScroll($0) },
+                                onClickDown: { remote.sendDown(.mouseClick) },
+                                onClickUp: { remote.sendUp(.mouseClick) }
+                            )
+                            .nativeGlassID("centerPad", in: padMorphNamespace)
+                            .transition(.scale(scale: 0.92).combined(with: .opacity))
+
+                        case .trackpad:
+                            TrackpadSurfaceView(
+                                onMove: { dx, dy in remote.sendMouseOffset(dx: dx, dy: dy) },
+                                onVerticalScroll: { remote.sendMouseVerticalScroll($0) },
+                                onHorizontalScroll: { remote.sendMouseHorizontalScroll($0) },
+                                onClick: { remote.send(.mouseClick) },
+                                onClickDown: { remote.sendDown(.mouseClick) },
+                                onClickUp: { remote.sendUp(.mouseClick) }
+                            )
+                            .nativeGlassID("centerPad", in: padMorphNamespace)
+                            .transition(.scale(scale: 0.94).combined(with: .opacity))
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .animation(NativeLiquidSpring.morph, value: padMode)
+                }
+
+                // 4. Нижний блок кнопок 3×3 в нативном Liquid Glass (высокий «Назад», Ассистент, VOL+, VOL-, Домой, TV, Настройки, Mute)
+                NativeGlassContainer(spacing: gridSpacing) {
+                    HStack(spacing: gridSpacing) {
+                        // Колонка 1: Высокая «Назад» (2 строки) + «Без звука» (1 строка)
+                        VStack(spacing: gridSpacing) {
+                            MinimalRemoteKeyButton(
+                                height: cellHeight * 2 + gridSpacing,
+                                accessibilityTitle: "Назад"
+                            ) {
+                                Image(systemName: "arrow.uturn.backward")
+                                    .font(.system(size: 20, weight: .medium))
+                            } action: {
+                                send(.back)
+                            }
+
+                            MinimalRemoteKeyButton(
+                                height: cellHeight,
+                                accessibilityTitle: "Отключить звук"
+                            ) {
+                                Image(systemName: "speaker.slash")
+                                    .font(.system(size: 20, weight: .regular))
+                            } action: {
+                                send(.mute)
+                            }
                         }
 
-                        MinimalRemoteKeyButton(
-                            height: cellHeight,
-                            accessibilityTitle: "Настройки"
-                        ) {
-                            Image(systemName: "gearshape")
-                                .font(.system(size: 20, weight: .regular))
-                        } action: {
-                            send(.settings)
+                        // Колонка 2: Виртуальный ассистент + VOL + + VOL -
+                        VStack(spacing: gridSpacing) {
+                            MinimalRemoteKeyButton(
+                                height: cellHeight,
+                                highlighted: remote.voiceState != .idle,
+                                highlightTint: remote.activePlatform.accentColor,
+                                accessibilityTitle: "Виртуальный ассистент (\(remote.activePlatform.voiceTitle))"
+                            ) {
+                                AssistantGlyph(
+                                    platform: remote.activePlatform,
+                                    isListening: remote.voiceState != .idle
+                                )
+                            } action: {
+                                Haptics.tap()
+                                remote.toggleVoice()
+                            }
+
+                            MinimalHoldRemoteKeyButton(
+                                height: cellHeight,
+                                title: "VOL +",
+                                onDown: { remote.sendDown(.volumeUp) },
+                                onUp: { remote.sendUp(.volumeUp) }
+                            )
+
+                            MinimalHoldRemoteKeyButton(
+                                height: cellHeight,
+                                title: "VOL -",
+                                onDown: { remote.sendDown(.volumeDown) },
+                                onUp: { remote.sendUp(.volumeDown) }
+                            )
+                        }
+
+                        // Колонка 3: Домой + TV + Настройки
+                        VStack(spacing: gridSpacing) {
+                            MinimalRemoteKeyButton(
+                                height: cellHeight,
+                                accessibilityTitle: "Домашний экран"
+                            ) {
+                                Image(systemName: "house")
+                                    .font(.system(size: 20, weight: .regular))
+                            } action: {
+                                send(.home)
+                            }
+
+                            MinimalRemoteKeyButton(
+                                height: cellHeight,
+                                accessibilityTitle: "Телеканалы / Вход (удержание — Пауза/Плей)",
+                                onLongPress: {
+                                    Haptics.medium()
+                                    remote.send(.playPause)
+                                }
+                            ) {
+                                Text("TV")
+                                    .font(.system(size: 17, weight: .semibold))
+                            } action: {
+                                send(.source)
+                            }
+
+                            MinimalRemoteKeyButton(
+                                height: cellHeight,
+                                accessibilityTitle: "Настройки"
+                            ) {
+                                Image(systemName: "gearshape")
+                                    .font(.system(size: 20, weight: .regular))
+                            } action: {
+                                send(.settings)
+                            }
                         }
                     }
                 }
@@ -848,25 +854,25 @@ private struct CircularPowerButton: View {
     @State private var holdTask: Task<Void, Never>?
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(isHolding ? SberPalette.coral : (isActive ? Color.white : Color(white: 0.145)))
-
-            Image(systemName: "power")
-                .font(.system(size: 19, weight: .semibold))
-                .foregroundStyle(isHolding ? .white : (isActive ? Color.black : Color.white))
-        }
-        .frame(width: 44, height: 44)
-        .scaleEffect(isPressed ? 0.92 : 1.0)
-        .animation(.easeOut(duration: 0.12), value: isPressed)
-        .animation(.easeOut(duration: 0.15), value: isHolding)
-        .contentShape(Circle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .updating($gesturePressed) { _, state, _ in
-                    state = true
-                }
-        )
+        Image(systemName: "power")
+            .font(.system(size: 19, weight: .semibold))
+            .foregroundStyle(isHolding ? .white : (isActive ? Color.black : Color.white))
+            .frame(width: 44, height: 44)
+            .nativeLiquidGlass(
+                in: Circle(),
+                tint: isHolding ? SberPalette.coral.opacity(0.88) : (isActive ? Color.white.opacity(0.92) : nil),
+                interactive: true
+            )
+            .scaleEffect(isPressed ? 0.90 : 1.0)
+            .animation(NativeLiquidSpring.press, value: isPressed)
+            .animation(NativeLiquidSpring.press, value: isHolding)
+            .contentShape(Circle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .updating($gesturePressed) { _, state, _ in
+                        state = true
+                    }
+            )
         .onChange(of: gesturePressed) { active in
             if active { beginPress() } else { endPress() }
         }
@@ -919,21 +925,6 @@ private struct ConcentricDPadRingView: View {
 
     var body: some View {
         ZStack {
-            // Внешнее матовое кольцо
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [Color(white: 0.135), Color(white: 0.105)],
-                        center: .center,
-                        startRadius: innerDiameter * 0.5,
-                        endRadius: diameter * 0.5
-                    )
-                )
-                .overlay(
-                    Circle()
-                        .strokeBorder(Color.white.opacity(0.05), lineWidth: 1)
-                )
-
             // Подсветка нажатого сектора кольца
             if let active = activeCommand, active != .ok {
                 dpadSectorHighlight(for: active)
@@ -944,43 +935,49 @@ private struct ConcentricDPadRingView: View {
                 Image(systemName: "chevron.up")
                     .font(.system(size: 19, weight: .semibold))
                     .foregroundStyle(activeCommand == .up ? Color.white : Color.white.opacity(0.90))
+                    .scaleEffect(activeCommand == .up ? 1.14 : 1.0)
                     .padding(.top, diameter * 0.085)
                 Spacer()
                 Image(systemName: "chevron.down")
                     .font(.system(size: 19, weight: .semibold))
                     .foregroundStyle(activeCommand == .down ? Color.white : Color.white.opacity(0.90))
+                    .scaleEffect(activeCommand == .down ? 1.14 : 1.0)
                     .padding(.bottom, diameter * 0.085)
             }
+            .animation(NativeLiquidSpring.press, value: activeCommand)
 
             HStack {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 19, weight: .semibold))
                     .foregroundStyle(activeCommand == .left ? Color.white : Color.white.opacity(0.90))
+                    .scaleEffect(activeCommand == .left ? 1.14 : 1.0)
                     .padding(.leading, diameter * 0.085)
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.system(size: 19, weight: .semibold))
                     .foregroundStyle(activeCommand == .right ? Color.white : Color.white.opacity(0.90))
+                    .scaleEffect(activeCommand == .right ? 1.14 : 1.0)
                     .padding(.trailing, diameter * 0.085)
             }
+            .animation(NativeLiquidSpring.press, value: activeCommand)
 
-            // Центральная утопленная кнопка OK
-            Circle()
-                .fill(activeCommand == .ok ? Color(white: 0.16) : Color(white: 0.055))
+            // Центральная кнопка OK в нативном Liquid Glass
+            Text("OK")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(.white)
                 .frame(width: innerDiameter, height: innerDiameter)
-                .overlay(
-                    Circle()
-                        .strokeBorder(Color.white.opacity(activeCommand == .ok ? 0.18 : 0.04), lineWidth: 1)
+                .nativeLiquidGlass(
+                    in: Circle(),
+                    tint: activeCommand == .ok ? Color.white.opacity(0.24) : Color.black.opacity(0.45),
+                    interactive: true
                 )
-                .overlay(
-                    Text("OK")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(.white)
-                )
-                .scaleEffect(activeCommand == .ok ? 0.94 : 1.0)
-                .animation(.easeOut(duration: 0.10), value: activeCommand == .ok)
+                .scaleEffect(activeCommand == .ok ? 0.92 : 1.0)
+                .animation(NativeLiquidSpring.press, value: activeCommand == .ok)
         }
         .frame(width: diameter, height: diameter)
+        .nativeLiquidGlass(in: Circle(), interactive: true)
+        .scaleEffect(activeCommand != nil && activeCommand != .ok ? 0.985 : 1.0)
+        .animation(NativeLiquidSpring.press, value: activeCommand)
         .contentShape(Circle())
         .gesture(
             DragGesture(minimumDistance: 0, coordinateSpace: .local)
@@ -1073,16 +1070,10 @@ private struct MinimalRemoteKeyButton<LabelContent: View>: View {
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .frame(height: height)
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(highlighted ? highlightTint.opacity(0.45) : Color(white: 0.14))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .strokeBorder(
-                                    highlighted ? highlightTint.opacity(0.75) : Color.white.opacity(0.05),
-                                    lineWidth: 1
-                                )
-                        )
+                .nativeLiquidGlass(
+                    in: RoundedRectangle(cornerRadius: 22, style: .continuous),
+                    tint: highlighted ? highlightTint.opacity(0.52) : nil,
+                    interactive: true
                 )
         }
         .buttonStyle(RemotePressStyle())
@@ -1111,17 +1102,14 @@ private struct MinimalHoldRemoteKeyButton: View {
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .frame(height: height)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(isPressed ? Color(white: 0.22) : Color(white: 0.14))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .strokeBorder(Color.white.opacity(isPressed ? 0.14 : 0.05), lineWidth: 1)
-                    )
+            .nativeLiquidGlass(
+                in: RoundedRectangle(cornerRadius: 22, style: .continuous),
+                tint: isPressed ? Color.white.opacity(0.20) : nil,
+                interactive: true
             )
-            .scaleEffect(isPressed ? 0.96 : 1.0)
-            .animation(.easeOut(duration: 0.10), value: isPressed)
-            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .scaleEffect(isPressed ? 0.94 : 1.0)
+            .animation(NativeLiquidSpring.press, value: isPressed)
+            .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .updating($gesturePressed) { _, state, _ in
@@ -1392,14 +1380,7 @@ struct TouchpadSurfaceView: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color(white: 0.125))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.05), lineWidth: 1)
-                )
-
-            // Крупные приглушённые стрелки по 4 сторонам (как на референсе IMG_0137)
+            // Крупные приглушённые стрелки по 4 сторонам
             VStack {
                 Image(systemName: "chevron.up")
                     .font(.system(size: 32, weight: .ultraLight))
@@ -1432,11 +1413,11 @@ struct TouchpadSurfaceView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 18)
                 .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(Color.white.opacity(0.18))
+                .nativeLiquidGlass(
+                    in: RoundedRectangle(cornerRadius: 18, style: .continuous),
+                    tint: Color.white.opacity(0.18)
                 )
-                .transition(.scale(scale: 0.9).combined(with: .opacity))
+                .transition(.scale(scale: 0.88).combined(with: .opacity))
             } else if let feedback {
                 VStack(spacing: 6) {
                     Image(systemName: feedback.symbol)
@@ -1447,15 +1428,15 @@ struct TouchpadSurfaceView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 18)
                 .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(Color.white.opacity(0.16))
+                .nativeLiquidGlass(
+                    in: RoundedRectangle(cornerRadius: 18, style: .continuous),
+                    tint: Color.white.opacity(0.14)
                 )
                 .transition(.scale(scale: 0.88).combined(with: .opacity))
             } else if trail.isEmpty {
                 Text("Смахивайте для\nперехода по пунктам\nменю")
                     .font(.subheadline.weight(.medium))
-                    .foregroundStyle(Color.white.opacity(0.32))
+                    .foregroundStyle(Color.white.opacity(0.36))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 54)
                     .allowsHitTesting(false)
@@ -1475,7 +1456,11 @@ struct TouchpadSurfaceView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .contentShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .nativeLiquidGlass(
+            in: RoundedRectangle(cornerRadius: 32, style: .continuous),
+            interactive: true
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
         .gesture(
             DragGesture(minimumDistance: 0, coordinateSpace: .local)
                 .updating($touchActive) { _, state, _ in
@@ -1573,7 +1558,7 @@ struct TouchpadSurfaceView: View {
                     feedbackTask?.cancel()
                     feedback = nil
                     Haptics.medium()
-                    withAnimation(.easeOut(duration: 0.14)) {
+                    withAnimation(NativeLiquidSpring.press) {
                         activeHold = holdGesture
                     }
                     onDown(holdGesture.command)
@@ -1584,7 +1569,7 @@ struct TouchpadSurfaceView: View {
 
     private func releaseActiveHold() {
         guard let hold = activeHold else { return }
-        withAnimation(.easeOut(duration: 0.14)) {
+        withAnimation(NativeLiquidSpring.release) {
             activeHold = nil
         }
         onUp(hold.command)
@@ -1592,14 +1577,14 @@ struct TouchpadSurfaceView: View {
 
     private func showFeedback(_ gesture: TouchpadGesture) {
         feedbackTask?.cancel()
-        withAnimation(.easeOut(duration: 0.14)) {
+        withAnimation(NativeLiquidSpring.press) {
             feedback = gesture
         }
         feedbackTask = Task {
             try? await Task.sleep(nanoseconds: 420_000_000)
             guard !Task.isCancelled else { return }
             await MainActor.run {
-                withAnimation(.easeOut(duration: 0.18)) {
+                withAnimation(NativeLiquidSpring.release) {
                     feedback = nil
                 }
             }
@@ -1616,12 +1601,9 @@ struct TextInputSheet: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        ZStack {
-            Color(red: 0.08, green: 0.08, blue: 0.09)
-                .ignoresSafeArea()
-
+        NativeGlassContainer(spacing: 10) {
             VStack(spacing: 14) {
-                // Главная строка ввода с кнопками ▲ и ▼ справа (как на IMG_0140)
+                // Главная строка ввода с кнопками ▲ и ▼ справа в нативном Liquid Glass
                 HStack(spacing: 10) {
                     HStack(spacing: 8) {
                         TextField("Поиск или ввод текста…", text: $text)
@@ -1643,9 +1625,9 @@ struct TextInputSheet: View {
                     }
                     .padding(.horizontal, 14)
                     .frame(height: 52)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color(white: 0.16))
+                    .nativeLiquidGlass(
+                        in: RoundedRectangle(cornerRadius: 18, style: .continuous),
+                        interactive: true
                     )
 
                     Button {
@@ -1656,9 +1638,9 @@ struct TextInputSheet: View {
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundStyle(.white)
                             .frame(width: 52, height: 52)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .fill(Color(white: 0.16))
+                            .nativeLiquidGlass(
+                                in: RoundedRectangle(cornerRadius: 18, style: .continuous),
+                                interactive: true
                             )
                     }
                     .buttonStyle(RemotePressStyle())
@@ -1672,9 +1654,9 @@ struct TextInputSheet: View {
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundStyle(.white)
                             .frame(width: 52, height: 52)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .fill(Color(white: 0.16))
+                            .nativeLiquidGlass(
+                                in: RoundedRectangle(cornerRadius: 18, style: .continuous),
+                                interactive: true
                             )
                     }
                     .buttonStyle(RemotePressStyle())
@@ -1691,11 +1673,13 @@ struct TextInputSheet: View {
                             .foregroundStyle(trimmedText.isEmpty ? .white.opacity(0.4) : .black)
                             .frame(maxWidth: .infinity)
                             .frame(height: 44)
-                            .background(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(trimmedText.isEmpty ? Color(white: 0.16) : Color.white)
+                            .nativeLiquidGlass(
+                                in: RoundedRectangle(cornerRadius: 16, style: .continuous),
+                                tint: trimmedText.isEmpty ? nil : Color.white.opacity(0.92),
+                                interactive: !trimmedText.isEmpty
                             )
                     }
+                    .buttonStyle(RemotePressStyle())
                     .disabled(trimmedText.isEmpty)
 
                     Button {
@@ -1706,11 +1690,12 @@ struct TextInputSheet: View {
                             .foregroundStyle(.white.opacity(text.isEmpty ? 0.4 : 0.95))
                             .frame(maxWidth: .infinity)
                             .frame(height: 44)
-                            .background(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(Color(white: 0.16))
+                            .nativeLiquidGlass(
+                                in: RoundedRectangle(cornerRadius: 16, style: .continuous),
+                                interactive: !text.isEmpty
                             )
                     }
+                    .buttonStyle(RemotePressStyle())
                     .disabled(text.isEmpty)
 
                     Button {
@@ -1722,11 +1707,12 @@ struct TextInputSheet: View {
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundStyle(.white.opacity(trimmedText.isEmpty ? 0.35 : 0.92))
                             .frame(width: 48, height: 44)
-                            .background(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(Color(white: 0.16))
+                            .nativeLiquidGlass(
+                                in: RoundedRectangle(cornerRadius: 16, style: .continuous),
+                                interactive: !trimmedText.isEmpty
                             )
                     }
+                    .buttonStyle(RemotePressStyle())
                     .disabled(trimmedText.isEmpty)
                     .accessibilityLabel("Искать на YouTube")
 
@@ -1738,11 +1724,12 @@ struct TextInputSheet: View {
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.9))
                             .frame(width: 48, height: 44)
-                            .background(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(Color(white: 0.16))
+                            .nativeLiquidGlass(
+                                in: RoundedRectangle(cornerRadius: 16, style: .continuous),
+                                interactive: true
                             )
                     }
+                    .buttonStyle(RemotePressStyle())
                     .accessibilityLabel("Стереть")
 
                     Button {
@@ -1753,11 +1740,12 @@ struct TextInputSheet: View {
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.9))
                             .frame(width: 48, height: 44)
-                            .background(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(Color(white: 0.16))
+                            .nativeLiquidGlass(
+                                in: RoundedRectangle(cornerRadius: 16, style: .continuous),
+                                interactive: true
                             )
                     }
+                    .buttonStyle(RemotePressStyle())
                     .accessibilityLabel("Enter")
                 }
 
@@ -1766,6 +1754,7 @@ struct TextInputSheet: View {
             .padding(.horizontal, 16)
             .padding(.top, 20)
         }
+        .nativeGlassSheetContainerBackground()
         .preferredColorScheme(.dark)
         .modifier(CompactSearchSheetDetentModifier())
         .onAppear {
@@ -1799,7 +1788,7 @@ private struct CompactSearchSheetDetentModifier: ViewModifier {
         if #available(iOS 16.0, *) {
             content
                 .presentationDetents([.height(175), .medium])
-                .presentationDragIndicator(.visible)
+                .nativePresentationSheet()
         } else {
             content
         }
@@ -1808,10 +1797,23 @@ private struct CompactSearchSheetDetentModifier: ViewModifier {
 
 struct RemotePressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            configuration.label
+                .scaleEffect(configuration.isPressed ? 0.94 : 1.0)
+                .animation(NativeLiquidSpring.press, value: configuration.isPressed)
+        } else {
+            configuration.label
+                .scaleEffect(configuration.isPressed ? 0.94 : 1.0)
+                .opacity(configuration.isPressed ? 0.86 : 1.0)
+                .animation(NativeLiquidSpring.press, value: configuration.isPressed)
+        }
+        #else
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.94 : 1.0)
-            .opacity(configuration.isPressed ? 0.84 : 1.0)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .opacity(configuration.isPressed ? 0.86 : 1.0)
+            .animation(NativeLiquidSpring.press, value: configuration.isPressed)
+        #endif
     }
 }
 
@@ -1829,20 +1831,18 @@ struct PinSheet: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        ZStack {
-            Color(red: 0.05, green: 0.05, blue: 0.07)
-                .ignoresSafeArea()
-
+        NativeGlassContainer(spacing: 14) {
             VStack(spacing: 18) {
-                ZStack {
-                    Circle()
-                        .fill(remote.activePlatform.accentColor.opacity(0.22))
-                        .frame(width: 74, height: 74)
-                    Image(systemName: "lock.shield.fill")
-                        .font(.system(size: 32, weight: .semibold))
-                        .foregroundStyle(remote.activePlatform.accentColor)
-                }
-                .padding(.top, 28)
+                Image(systemName: "lock.shield.fill")
+                    .font(.system(size: 32, weight: .semibold))
+                    .foregroundStyle(remote.activePlatform.accentColor)
+                    .frame(width: 74, height: 74)
+                    .nativeLiquidGlass(
+                        in: Circle(),
+                        tint: remote.activePlatform.accentColor.opacity(0.26),
+                        interactive: false
+                    )
+                    .padding(.top, 28)
 
                 Text("Код с экрана ТВ")
                     .font(.title2.bold())
@@ -1866,9 +1866,9 @@ struct PinSheet: View {
                     .font(.system(size: 32, weight: .bold, design: .monospaced))
                     .foregroundStyle(.white)
                     .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(Color(white: 0.14))
+                    .nativeLiquidGlass(
+                        in: RoundedRectangle(cornerRadius: 20, style: .continuous),
+                        interactive: true
                     )
 
                 if let error = remote.errorText {
@@ -1887,22 +1887,25 @@ struct PinSheet: View {
                         .foregroundStyle(remote.pin.isEmpty ? .white.opacity(0.45) : .black)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 15)
-                        .background(
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .fill(remote.pin.isEmpty ? Color(white: 0.16) : Color.white)
+                        .nativeLiquidGlass(
+                            in: RoundedRectangle(cornerRadius: 20, style: .continuous),
+                            tint: remote.pin.isEmpty ? nil : Color.white.opacity(0.92),
+                            interactive: !remote.pin.isEmpty
                         )
                 }
+                .buttonStyle(RemotePressStyle())
                 .disabled(remote.pin.isEmpty)
 
                 Button("Отмена") {
                     remote.cancelPin()
                 }
-                .foregroundStyle(.white.opacity(0.65))
+                .foregroundStyle(.white.opacity(0.68))
 
                 Spacer()
             }
             .padding(.horizontal, 24)
         }
+        .nativeGlassSheetContainerBackground()
         .preferredColorScheme(.dark)
         .nativePresentationSheet()
         .onAppear { focused = true }

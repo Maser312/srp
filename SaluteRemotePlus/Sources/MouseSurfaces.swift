@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Режим курсора (Трекпад — дизайн с боковыми и нижней шкалами прокрутки)
+// MARK: - Режим курсора (Трекпад — нативный Liquid Glass + 3 шкалы прокрутки)
 
 struct TrackpadSurfaceView: View {
     let onMove: (Float, Float) -> Void
@@ -23,35 +23,27 @@ struct TrackpadSurfaceView: View {
     @State private var gestureEndedNormally = false
 
     var body: some View {
+        let padShape = RoundedRectangle(cornerRadius: 32, style: .continuous)
+
         VStack(spacing: 14) {
             HStack(spacing: 10) {
-                // Левая вертикальная шкала прокрутки (как на референсе)
+                // Левая вертикальная шкала прокрутки
                 MinimalScrollTickStrip(axis: .vertical) { delta in
                     onVerticalScroll(delta)
                 }
                 .frame(width: 34)
 
-                // Центральная сенсорная панель трекпада
+                // Центральная сенсорная панель трекпада с нативным Liquid Glass
                 ZStack {
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .fill(Color(white: 0.125))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                                .strokeBorder(
-                                    isHoldingClick ? Color.white.opacity(0.32) : Color.white.opacity(0.06),
-                                    lineWidth: isHoldingClick ? 1.4 : 1
-                                )
-                        )
-
                     if touchPoint == nil && !clickFlash {
                         VStack(spacing: 14) {
                             Image(systemName: "hand.draw.fill")
                                 .font(.system(size: 46, weight: .regular))
-                                .foregroundStyle(Color.white.opacity(0.30))
+                                .foregroundStyle(Color.white.opacity(0.32))
 
                             Text("Водите пальцем по панели и управляйте курсором")
                                 .font(.subheadline.weight(.medium))
-                                .foregroundStyle(Color.white.opacity(0.34))
+                                .foregroundStyle(Color.white.opacity(0.38))
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal, 22)
                         }
@@ -60,19 +52,9 @@ struct TrackpadSurfaceView: View {
 
                     if let pt = touchPoint {
                         Circle()
-                            .fill(
-                                RadialGradient(
-                                    colors: [
-                                        Color.white.opacity(isHoldingClick ? 0.34 : 0.22),
-                                        Color.white.opacity(0.05),
-                                        Color.clear
-                                    ],
-                                    center: .center,
-                                    startRadius: 2,
-                                    endRadius: isHoldingClick ? 46 : 36
-                                )
-                            )
-                            .frame(width: isHoldingClick ? 92 : 72, height: isHoldingClick ? 92 : 72)
+                            .fill(Color.white.opacity(isHoldingClick ? 0.28 : 0.16))
+                            .frame(width: isHoldingClick ? 76 : 56, height: isHoldingClick ? 76 : 56)
+                            .blur(radius: isHoldingClick ? 12 : 10)
                             .position(pt)
                             .allowsHitTesting(false)
                     }
@@ -82,26 +64,34 @@ struct TrackpadSurfaceView: View {
                             Text("Перетаскивание (ЛКМ зажата)")
                                 .font(.caption2.weight(.semibold))
                                 .foregroundStyle(.white)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 5)
-                                .background(Capsule().fill(Color.white.opacity(0.18)))
-                                .padding(.top, 12)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 6)
+                                .nativeLiquidGlass(in: Capsule(), tint: Color.white.opacity(0.18))
+                                .padding(.top, 14)
                             Spacer()
                         }
+                        .transition(.scale(scale: 0.88).combined(with: .opacity))
                         .allowsHitTesting(false)
                     } else if clickFlash {
                         Text("Клик")
                             .font(.caption.weight(.bold))
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 6)
-                            .background(Capsule().fill(Color.white.opacity(0.18)))
-                            .transition(.scale(scale: 0.88).combined(with: .opacity))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 7)
+                            .nativeLiquidGlass(in: Capsule(), tint: Color.white.opacity(0.20))
+                            .transition(.scale(scale: 0.84).combined(with: .opacity))
                             .allowsHitTesting(false)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contentShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                .nativeLiquidGlass(
+                    in: padShape,
+                    tint: isHoldingClick ? Color.white.opacity(0.14) : nil,
+                    interactive: true
+                )
+                .scaleEffect(isHoldingClick ? 0.985 : 1.0)
+                .animation(NativeLiquidSpring.press, value: isHoldingClick)
+                .contentShape(padShape)
                 .gesture(
                     DragGesture(minimumDistance: 0, coordinateSpace: .local)
                         .updating($touchActive) { _, state, _ in
@@ -201,7 +191,9 @@ struct TrackpadSurfaceView: View {
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 guard startPoint != nil, totalTravel < 10, !isHoldingClick else { return }
-                isHoldingClick = true
+                withAnimation(NativeLiquidSpring.press) {
+                    isHoldingClick = true
+                }
                 Haptics.medium()
                 onClickDown()
             }
@@ -210,7 +202,9 @@ struct TrackpadSurfaceView: View {
 
     private func releaseHoldClick() {
         guard isHoldingClick else { return }
-        isHoldingClick = false
+        withAnimation(NativeLiquidSpring.release) {
+            isHoldingClick = false
+        }
         onClickUp()
     }
 
@@ -223,14 +217,14 @@ struct TrackpadSurfaceView: View {
 
     private func triggerClickFlash() {
         flashTask?.cancel()
-        withAnimation(.easeOut(duration: 0.12)) {
+        withAnimation(NativeLiquidSpring.press) {
             clickFlash = true
         }
         flashTask = Task {
             try? await Task.sleep(nanoseconds: 300_000_000)
             guard !Task.isCancelled else { return }
             await MainActor.run {
-                withAnimation(.easeOut(duration: 0.16)) {
+                withAnimation(NativeLiquidSpring.release) {
                     clickFlash = false
                 }
             }
@@ -238,7 +232,7 @@ struct TrackpadSurfaceView: View {
     }
 }
 
-// MARK: - Режим Аэромыши (круглая кнопка клика + 3 минималистичные шкалы прокрутки)
+// MARK: - Режим Аэромыши (круглая кнопка клика Liquid Glass + 3 шкалы прокрутки)
 
 struct AirMouseSurfaceView: View {
     let onMove: (Float, Float) -> Void
@@ -329,50 +323,46 @@ private struct AirMouseCenterCircleButton: View {
     @State private var isPressed = false
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(isPressed ? Color(white: 0.22) : Color(white: 0.145))
-                .overlay(
-                    Circle()
-                        .strokeBorder(Color.white.opacity(isPressed ? 0.22 : 0.06), lineWidth: 1)
-                )
-
-            Image(systemName: isPaused ? "pause.fill" : "hand.tap.fill")
-                .font(.system(size: 46, weight: .regular))
-                .foregroundStyle(.white.opacity(0.95))
-        }
-        .frame(width: 196, height: 196)
-        .scaleEffect(isPressed ? 0.94 : 1.0)
-        .animation(.easeOut(duration: 0.1), value: isPressed)
-        .contentShape(Circle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .updating($gesturePressed) { _, state, _ in
-                    state = true
+        Image(systemName: isPaused ? "pause.fill" : "hand.tap.fill")
+            .font(.system(size: 46, weight: .regular))
+            .foregroundStyle(.white.opacity(0.96))
+            .frame(width: 196, height: 196)
+            .nativeLiquidGlass(
+                in: Circle(),
+                tint: isPressed ? Color.white.opacity(0.18) : nil,
+                interactive: true
+            )
+            .scaleEffect(isPressed ? 0.92 : 1.0)
+            .animation(NativeLiquidSpring.press, value: isPressed)
+            .contentShape(Circle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .updating($gesturePressed) { _, state, _ in
+                        state = true
+                    }
+            )
+            .onChange(of: gesturePressed) { active in
+                if active {
+                    guard !isPressed else { return }
+                    isPressed = true
+                    Haptics.tap()
+                    onDown()
+                } else {
+                    guard isPressed else { return }
+                    isPressed = false
+                    onUp()
                 }
-        )
-        .onChange(of: gesturePressed) { active in
-            if active {
-                guard !isPressed else { return }
-                isPressed = true
-                Haptics.tap()
-                onDown()
-            } else {
-                guard isPressed else { return }
-                isPressed = false
-                onUp()
             }
-        }
-        .onDisappear {
-            if isPressed {
-                isPressed = false
-                onUp()
+            .onDisappear {
+                if isPressed {
+                    isPressed = false
+                    onUp()
+                }
             }
-        }
     }
 }
 
-// MARK: - Минималистичная 5-линейная шкала прокрутки (как в официальном пульте)
+// MARK: - Минималистичная 5-линейная шкала прокрутки с упругим откликом
 
 private struct MinimalScrollTickStrip: View {
     enum Axis { case vertical, horizontal }
@@ -391,20 +381,21 @@ private struct MinimalScrollTickStrip: View {
                 VStack(spacing: 8) {
                     ForEach(0..<5, id: \.self) { _ in
                         Capsule()
-                            .fill(Color.white.opacity(active ? 0.92 : 0.45))
-                            .frame(width: 14, height: 1.8)
+                            .fill(Color.white.opacity(active ? 0.96 : 0.45))
+                            .frame(width: active ? 17 : 14, height: 2.0)
                     }
                 }
             } else {
                 HStack(spacing: 8) {
                     ForEach(0..<5, id: \.self) { _ in
                         Capsule()
-                            .fill(Color.white.opacity(active ? 0.92 : 0.45))
-                            .frame(width: 1.8, height: 14)
+                            .fill(Color.white.opacity(active ? 0.96 : 0.45))
+                            .frame(width: 2.0, height: active ? 17 : 14)
                     }
                 }
             }
         }
+        .animation(NativeLiquidSpring.press, value: active)
         .contentShape(Rectangle())
         .gesture(
             DragGesture(minimumDistance: 0, coordinateSpace: .local)

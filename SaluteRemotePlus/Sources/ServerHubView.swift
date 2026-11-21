@@ -5,9 +5,9 @@ import WebKit
 // MARK: - Тема Серверного Хаба (Datacenter Cobalt & Cyan Liquid Glass)
 
 enum ServerPalette {
-    static let bgTop = Color(red: 0.025, green: 0.042, blue: 0.082)
-    static let bgMid = Color(red: 0.040, green: 0.068, blue: 0.125)
-    static let bgBottom = Color(red: 0.016, green: 0.026, blue: 0.052)
+    static let bgTop = Color(red: 0.020, green: 0.020, blue: 0.028)
+    static let bgMid = Color(red: 0.020, green: 0.020, blue: 0.028)
+    static let bgBottom = Color(red: 0.020, green: 0.020, blue: 0.028)
 
     static let dellBlue = Color(red: 0.00, green: 0.54, blue: 0.88)
     static let iruCyan = Color(red: 0.08, green: 0.78, blue: 0.96)
@@ -15,82 +15,11 @@ enum ServerPalette {
     static let onlineGreen = Color(red: 0.14, green: 0.88, blue: 0.60)
     static let warnAmber = Color(red: 1.00, green: 0.72, blue: 0.22)
     static let dangerRed = Color(red: 1.00, green: 0.28, blue: 0.34)
-
-    static let accentButtonGradient = LinearGradient(
-        colors: [
-            Color(red: 0.08, green: 0.74, blue: 0.96),
-            Color(red: 0.00, green: 0.48, blue: 0.86),
-            Color(red: 0.10, green: 0.30, blue: 0.74)
-        ],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
-
-    static let glassTopSheen = LinearGradient(
-        colors: [
-            Color.white.opacity(0.22),
-            Color.white.opacity(0.06),
-            Color.clear
-        ],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
-
-    static let glassBorderGradient = LinearGradient(
-        colors: [
-            Color.white.opacity(0.32),
-            iruCyan.opacity(0.24),
-            Color.white.opacity(0.06),
-            dellBlue.opacity(0.20)
-        ],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
-
-    static let glassAccentBorder = LinearGradient(
-        colors: [
-            Color.white.opacity(0.55),
-            iruCyan.opacity(0.65),
-            dellBlue.opacity(0.38)
-        ],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
 }
 
 struct ServerLiquidBackdrop: View {
     var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [ServerPalette.bgTop, ServerPalette.bgMid, ServerPalette.bgBottom],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            RadialGradient(
-                colors: [ServerPalette.dellBlue.opacity(0.30), Color.clear],
-                center: .topLeading,
-                startRadius: 10,
-                endRadius: 340
-            )
-            .offset(x: -70, y: -110)
-
-            RadialGradient(
-                colors: [ServerPalette.iruCyan.opacity(0.22), Color.clear],
-                center: .bottomTrailing,
-                startRadius: 20,
-                endRadius: 340
-            )
-            .offset(x: 90, y: 120)
-
-            RadialGradient(
-                colors: [ServerPalette.electricIndigo.opacity(0.14), Color.clear],
-                center: .center,
-                startRadius: 40,
-                endRadius: 360
-            )
-        }
-        .ignoresSafeArea()
+        NativeDarkBackdrop()
     }
 }
 
@@ -99,28 +28,12 @@ struct ServerGlassPanel: View {
     var accentGlow: Color? = nil
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         ZStack {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(.ultraThinMaterial)
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(Color(red: 0.04, green: 0.07, blue: 0.13).opacity(0.70))
-            if let glow = accentGlow {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [glow.opacity(0.18), Color.clear],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            }
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(ServerPalette.glassTopSheen)
-                .opacity(0.60)
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .strokeBorder(ServerPalette.glassBorderGradient, lineWidth: 1)
+            shape.fill(.ultraThinMaterial)
+            shape.fill(accentGlow?.opacity(0.12) ?? Color.white.opacity(0.05))
+            shape.strokeBorder(Color.white.opacity(0.14), lineWidth: 0.9)
         }
-        .shadow(color: Color.black.opacity(0.45), radius: 14, y: 8)
     }
 }
 
@@ -129,25 +42,9 @@ struct ServerGlassCircle: View {
 
     var body: some View {
         ZStack {
-            if accent {
-                Circle()
-                    .fill(ServerPalette.accentButtonGradient)
-                Circle()
-                    .fill(ServerPalette.glassTopSheen)
-                    .opacity(0.65)
-                Circle()
-                    .strokeBorder(ServerPalette.glassAccentBorder, lineWidth: 1.2)
-            } else {
-                Circle()
-                    .fill(.ultraThinMaterial)
-                Circle()
-                    .fill(Color.white.opacity(0.08))
-                Circle()
-                    .fill(ServerPalette.glassTopSheen)
-                    .opacity(0.45)
-                Circle()
-                    .strokeBorder(ServerPalette.glassBorderGradient, lineWidth: 1)
-            }
+            Circle().fill(.ultraThinMaterial)
+            Circle().fill(accent ? ServerPalette.dellBlue.opacity(0.75) : Color.white.opacity(0.06))
+            Circle().strokeBorder(Color.white.opacity(accent ? 0.28 : 0.14), lineWidth: 0.9)
         }
     }
 }
@@ -353,13 +250,11 @@ struct ServerHubView: View {
         VStack(spacing: 22) {
             HStack {
                 Button(action: onExit) {
-                    ZStack {
-                        ServerGlassCircle()
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
-                    .frame(width: 40, height: 40)
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 42, height: 42)
+                        .nativeLiquidGlass(in: Circle(), interactive: true)
                 }
                 .buttonStyle(RemotePressStyle())
                 Spacer()
@@ -369,14 +264,11 @@ struct ServerHubView: View {
 
             Spacer()
 
-            ZStack {
-                ServerGlassCircle(accent: true)
-                    .frame(width: 84, height: 84)
-                Image(systemName: "lock.shield.fill")
-                    .font(.system(size: 34, weight: .bold))
-                    .foregroundStyle(.white)
-            }
-            .shadow(color: ServerPalette.dellBlue.opacity(0.45), radius: 16, y: 6)
+            Image(systemName: "lock.shield.fill")
+                .font(.system(size: 34, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 84, height: 84)
+                .nativeLiquidGlass(in: Circle(), tint: ServerPalette.dellBlue.opacity(0.60))
 
             VStack(spacing: 8) {
                 Text("Доступ к серверам защищён")
@@ -564,7 +456,10 @@ struct ServerHubView: View {
             Spacer(minLength: 0)
         }
         .padding(13)
-        .background(ServerGlassPanel(cornerRadius: 20, accentGlow: manager.networkRoute.indicatorColor))
+        .nativeLiquidGlass(
+            in: RoundedRectangle(cornerRadius: 22, style: .continuous),
+            tint: manager.networkRoute.indicatorColor.opacity(0.14)
+        )
     }
 
     private var emptyOnboardingCard: some View {
@@ -628,7 +523,7 @@ struct ServerHubView: View {
             }
         }
         .padding(16)
-        .background(ServerGlassPanel(cornerRadius: 24, accentGlow: ServerPalette.dellBlue))
+        .nativeLiquidGlass(in: RoundedRectangle(cornerRadius: 26, style: .continuous))
     }
 }
 
@@ -659,24 +554,14 @@ private struct ServerDashboardCard: View {
         VStack(alignment: .leading, spacing: 12) {
             // Верхняя строка: бейдж вендора, имя, статус
             HStack(alignment: .top, spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [server.vendor.accentColor, server.vendor.secondaryAccentColor],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .strokeBorder(ServerPalette.glassAccentBorder, lineWidth: 1)
-                        )
-                    Image(systemName: server.vendor.symbol)
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(.white)
-                }
-                .frame(width: 46, height: 46)
+                Image(systemName: server.vendor.symbol)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 46, height: 46)
+                    .nativeLiquidGlass(
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous),
+                        tint: server.vendor.accentColor.opacity(0.62)
+                    )
 
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
@@ -749,13 +634,11 @@ private struct ServerDashboardCard: View {
                         Label("Удалить сервер", systemImage: "trash")
                     }
                 } label: {
-                    ZStack {
-                        ServerGlassCircle()
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.85))
-                    }
-                    .frame(width: 34, height: 34)
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.88))
+                        .frame(width: 36, height: 36)
+                        .nativeLiquidGlass(in: Circle(), interactive: true)
                 }
             }
 
@@ -865,7 +748,7 @@ private struct ServerDashboardCard: View {
             }
         }
         .padding(16)
-        .background(ServerGlassPanel(cornerRadius: 22, accentGlow: server.vendor.accentColor))
+        .nativeLiquidGlass(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
     private var serverStateStrip: some View {
@@ -972,22 +855,20 @@ struct ServerEditorSheet: View {
 
     var body: some View {
         NativeNavigationContainer {
-            ZStack {
-                ServerLiquidBackdrop()
-                editorForm
-            }
-            .navigationTitle(existing == nil ? "Новый сервер" : "Настройки сервера")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Отмена") { dismiss() }
+            editorForm
+                .nativeGlassSheetContainerBackground()
+                .navigationTitle(existing == nil ? "Новый сервер" : "Настройки сервера")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("Отмена") { dismiss() }
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("Сохранить") { save() }
+                            .font(.body.weight(.bold))
+                            .tint(ServerPalette.iruCyan)
+                    }
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Сохранить") { save() }
-                        .font(.body.weight(.bold))
-                        .tint(ServerPalette.iruCyan)
-                }
-            }
         }
         .nativePresentationSheet()
         .preferredColorScheme(.dark)
@@ -1219,133 +1100,131 @@ struct ServerWebConsoleView: View {
             ServerPalette.bgTop.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Компактная верхняя панель консоли
-                HStack(spacing: 8) {
-                    Button {
-                        Haptics.light()
-                        dismiss()
-                    } label: {
-                        ZStack {
-                            ServerGlassCircle()
+                // Компактная верхняя панель консоли в нативном Liquid Glass
+                NativeGlassContainer(spacing: 8) {
+                    HStack(spacing: 8) {
+                        Button {
+                            Haptics.light()
+                            dismiss()
+                        } label: {
                             Image(systemName: "xmark")
                                 .font(.system(size: 13, weight: .bold))
                                 .foregroundStyle(.white)
-                        }
-                        .frame(width: 34, height: 34)
-                    }
-                    .buttonStyle(RemotePressStyle())
-
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(server.name)
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                        Text(controller.currentHostDisplay.isEmpty ? server.displayAddress : controller.currentHostDisplay)
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.58))
-                            .lineLimit(1)
-                    }
-
-                    Spacer(minLength: 4)
-
-                    // Назад / Вперёд
-                    Button {
-                        controller.goBack()
-                    } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(controller.canGoBack ? Color.white : Color.white.opacity(0.28))
-                            .frame(width: 30, height: 34)
-                    }
-                    .disabled(!controller.canGoBack)
-
-                    Button {
-                        controller.goForward()
-                    } label: {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(controller.canGoForward ? Color.white : Color.white.opacity(0.28))
-                            .frame(width: 30, height: 34)
-                    }
-                    .disabled(!controller.canGoForward)
-
-                    // Автозаполнение логина/пароля в 1 тап
-                    if !server.username.isEmpty || !password.isEmpty {
-                        Button {
-                            Haptics.medium()
-                            controller.injectLoginAutofill(username: server.username, password: password, submit: true)
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "key.fill")
-                                    .font(.system(size: 11, weight: .bold))
-                                Text("Вход")
-                                    .font(.system(size: 11, weight: .bold))
-                            }
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 7)
-                            .background(
-                                Capsule()
-                                    .fill(server.vendor.accentColor.opacity(0.85))
-                                    .overlay(Capsule().strokeBorder(ServerPalette.glassAccentBorder, lineWidth: 0.8))
-                            )
+                                .frame(width: 36, height: 36)
+                                .nativeLiquidGlass(in: Circle(), interactive: true)
                         }
                         .buttonStyle(RemotePressStyle())
-                    }
 
-                    // Меню консоли: копирование логина/пароля, Desktop/Mobile UA, обновить
-                    Menu {
-                        if !server.username.isEmpty {
-                            Button {
-                                UIPasteboard.general.string = server.username
-                                onCopyNotice("Логин скопирован")
-                            } label: {
-                                Label("Скопировать логин", systemImage: "doc.on.doc")
-                            }
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(server.name)
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                            Text(controller.currentHostDisplay.isEmpty ? server.displayAddress : controller.currentHostDisplay)
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.58))
+                                .lineLimit(1)
                         }
-                        if !password.isEmpty {
-                            Button {
-                                UIPasteboard.general.string = password
-                                onCopyNotice("Пароль скопирован")
-                            } label: {
-                                Label("Скопировать пароль", systemImage: "key.fill")
-                            }
+
+                        Spacer(minLength: 4)
+
+                        // Назад / Вперёд
+                        Button {
+                            controller.goBack()
+                        } label: {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(controller.canGoBack ? Color.white : Color.white.opacity(0.28))
+                                .frame(width: 30, height: 34)
                         }
+                        .disabled(!controller.canGoBack)
+
+                        Button {
+                            controller.goForward()
+                        } label: {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(controller.canGoForward ? Color.white : Color.white.opacity(0.28))
+                                .frame(width: 30, height: 34)
+                        }
+                        .disabled(!controller.canGoForward)
+
+                        // Автозаполнение логина/пароля в 1 тап
                         if !server.username.isEmpty || !password.isEmpty {
                             Button {
-                                controller.injectLoginAutofill(username: server.username, password: password, submit: false)
+                                Haptics.medium()
+                                controller.injectLoginAutofill(username: server.username, password: password, submit: true)
                             } label: {
-                                Label("Заполнить поля без отправки", systemImage: "pencil")
+                                HStack(spacing: 4) {
+                                    Image(systemName: "key.fill")
+                                        .font(.system(size: 11, weight: .bold))
+                                    Text("Вход")
+                                        .font(.system(size: 11, weight: .bold))
+                                }
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 11)
+                                .padding(.vertical, 7)
+                                .nativeLiquidGlass(
+                                    in: Capsule(),
+                                    tint: server.vendor.accentColor.opacity(0.75),
+                                    interactive: true
+                                )
                             }
+                            .buttonStyle(RemotePressStyle())
                         }
-                        Divider()
-                        Button {
-                            useDesktopUA.toggle()
-                            controller.setDesktopMode(useDesktopUA)
+
+                        // Меню консоли: копирование логина/пароля, Desktop/Mobile UA, обновить
+                        Menu {
+                            if !server.username.isEmpty {
+                                Button {
+                                    UIPasteboard.general.string = server.username
+                                    onCopyNotice("Логин скопирован")
+                                } label: {
+                                    Label("Скопировать логин", systemImage: "doc.on.doc")
+                                }
+                            }
+                            if !password.isEmpty {
+                                Button {
+                                    UIPasteboard.general.string = password
+                                    onCopyNotice("Пароль скопирован")
+                                } label: {
+                                    Label("Скопировать пароль", systemImage: "key.fill")
+                                }
+                            }
+                            if !server.username.isEmpty || !password.isEmpty {
+                                Button {
+                                    controller.injectLoginAutofill(username: server.username, password: password, submit: false)
+                                } label: {
+                                    Label("Заполнить поля без отправки", systemImage: "pencil")
+                                }
+                            }
+                            Divider()
+                            Button {
+                                useDesktopUA.toggle()
+                                controller.setDesktopMode(useDesktopUA)
+                            } label: {
+                                Label(
+                                    useDesktopUA ? "Переключить на мобильный вид" : "Переключить на десктопный вид",
+                                    systemImage: useDesktopUA ? "iphone" : "desktopcomputer"
+                                )
+                            }
+                            Button {
+                                controller.reload()
+                            } label: {
+                                Label("Обновить страницу", systemImage: "arrow.clockwise")
+                            }
                         } label: {
-                            Label(
-                                useDesktopUA ? "Переключить на мобильный вид" : "Переключить на десктопный вид",
-                                systemImage: useDesktopUA ? "iphone" : "desktopcomputer"
-                            )
-                        }
-                        Button {
-                            controller.reload()
-                        } label: {
-                            Label("Обновить страницу", systemImage: "arrow.clockwise")
-                        }
-                    } label: {
-                        ZStack {
-                            ServerGlassCircle()
                             Image(systemName: "ellipsis")
                                 .font(.system(size: 13, weight: .bold))
                                 .foregroundStyle(.white)
+                                .frame(width: 36, height: 36)
+                                .nativeLiquidGlass(in: Circle(), interactive: true)
                         }
-                        .frame(width: 34, height: 34)
                     }
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(Color(red: 0.03, green: 0.05, blue: 0.10))
+                .background(ServerPalette.bgTop)
 
                 // Нативный линейный индикатор загрузки
                 if controller.isLoading {
@@ -1382,7 +1261,7 @@ struct ServerWebConsoleView: View {
                             .controlSize(.large)
                         }
                         .padding(20)
-                        .background(ServerGlassPanel(cornerRadius: 24))
+                        .nativeLiquidGlass(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                         .padding(20)
                     }
                 }
@@ -1425,7 +1304,7 @@ struct ServerWebConsoleView: View {
                     }
                 }
                 .padding(20)
-                .background(ServerGlassPanel(cornerRadius: 22))
+                .nativeLiquidGlass(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .padding(.horizontal, 26)
             }
         }

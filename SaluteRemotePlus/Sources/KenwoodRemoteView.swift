@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - Фирменная палитра KENWOOD Dark + Liquid Glass
 
 enum KenwoodPalette {
-    /// Фирменный красный KENWOOD (логотип, активные элементы, подсветка ресивера)
+    /// Фирменный красный KENWOOD (активные элементы и подсветка ресивера)
     static let crimson = Color(red: 0.902, green: 0.000, blue: 0.169)      // #E6002B
     static let neonRed = Color(red: 1.000, green: 0.196, blue: 0.286)      // #FF3249
     static let deepRed = Color(red: 0.580, green: 0.000, blue: 0.118)      // #94001E
@@ -13,100 +13,17 @@ enum KenwoodPalette {
     static let iceBlue = Color(red: 0.420, green: 0.878, blue: 1.000)      // #6BE0FF
     static let amber = Color(red: 1.000, green: 0.659, blue: 0.149)        // #FFA826
 
-    /// Глубокий графитово-карбоновый фон лицевой панели автомагнитолы
-    static let bgTop = Color(red: 0.031, green: 0.035, blue: 0.055)        // #08090E
-    static let bgMid = Color(red: 0.063, green: 0.071, blue: 0.106)        // #10121B
-    static let bgBottom = Color(red: 0.035, green: 0.035, blue: 0.051)     // #09090D
-
-    static let brandGradient = LinearGradient(
-        colors: [neonRed, crimson, Color(red: 1.0, green: 0.38, blue: 0.42)],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
-
-    static let accentButtonGradient = LinearGradient(
-        colors: [neonRed, crimson, deepRed],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
-
-    static let cyanGradient = LinearGradient(
-        colors: [iceBlue, cyan, Color(red: 0.0, green: 0.48, blue: 0.85)],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
-
-    static let glassBorderGradient = LinearGradient(
-        colors: [
-            Color.white.opacity(0.32),
-            Color.white.opacity(0.08),
-            cyan.opacity(0.20)
-        ],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
-
-    static let glassAccentBorder = LinearGradient(
-        colors: [
-            Color.white.opacity(0.55),
-            neonRed.opacity(0.85),
-            crimson.opacity(0.42)
-        ],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
-
-    static let specularSheen = LinearGradient(
-        colors: [
-            Color.white.opacity(0.18),
-            Color.white.opacity(0.04),
-            Color.clear
-        ],
-        startPoint: .top,
-        endPoint: .center
-    )
+    static let bgTop = Color(red: 0.020, green: 0.020, blue: 0.028)
+    static let bgMid = Color(red: 0.020, green: 0.020, blue: 0.028)
+    static let bgBottom = Color(red: 0.020, green: 0.020, blue: 0.028)
 }
 
-/// Тёмный автомобильный фон KENWOOD с неоновыми Liquid Glass ореолами (реагирует на цвет подсветки магнитолы)
+/// Чистый глубокий тёмный фон в стиле пульта без градиентов для нативного Liquid Glass.
 struct KenwoodLiquidBackdrop: View {
     let glowColor: Color
 
     var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [KenwoodPalette.bgTop, KenwoodPalette.bgMid, KenwoodPalette.bgBottom],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            // Верхний фирменный красный / цветной ореол
-            RadialGradient(
-                colors: [glowColor.opacity(0.28), KenwoodPalette.crimson.opacity(0.10), .clear],
-                center: .topTrailing,
-                startRadius: 20,
-                endRadius: 340
-            )
-            .offset(x: 70, y: -110)
-
-            // Левый холодный циановый ореол (как OLED-дисплей автомагнитолы)
-            RadialGradient(
-                colors: [KenwoodPalette.cyan.opacity(0.18), .clear],
-                center: .leading,
-                startRadius: 15,
-                endRadius: 300
-            )
-            .offset(x: -110, y: 80)
-
-            // Нижний глубокий малиново-графитовый отблеск
-            RadialGradient(
-                colors: [KenwoodPalette.crimson.opacity(0.16), .clear],
-                center: .bottom,
-                startRadius: 10,
-                endRadius: 310
-            )
-            .offset(x: 20, y: 200)
-        }
-        .ignoresSafeArea()
+        NativeDarkBackdrop()
     }
 }
 
@@ -119,31 +36,12 @@ struct KenwoodGlassPanel: View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         ZStack {
             shape.fill(.ultraThinMaterial)
-
-            if highlighted {
-                shape
-                    .fill(KenwoodPalette.accentButtonGradient)
-                    .opacity(0.88)
-            } else {
-                shape.fill(Color(red: 0.08, green: 0.09, blue: 0.13).opacity(0.56))
-            }
-
-            shape
-                .fill(KenwoodPalette.specularSheen)
-                .opacity(highlighted ? 0.8 : 0.65)
-        }
-        .overlay(
+            shape.fill(highlighted ? KenwoodPalette.crimson.opacity(0.62) : Color.white.opacity(0.05))
             shape.strokeBorder(
-                highlighted ? KenwoodPalette.glassAccentBorder : KenwoodPalette.glassBorderGradient,
-                lineWidth: highlighted ? 1.2 : 1.0
+                highlighted ? KenwoodPalette.neonRed.opacity(0.45) : Color.white.opacity(0.14),
+                lineWidth: 0.9
             )
-        )
-        .shadow(
-            color: (accentGlow ?? (highlighted ? KenwoodPalette.crimson : Color.black)).opacity(highlighted ? 0.36 : 0.38),
-            radius: highlighted ? 12 : 10,
-            x: 0,
-            y: 5
-        )
+        }
     }
 }
 
@@ -154,31 +52,12 @@ struct KenwoodGlassCircle: View {
     var body: some View {
         ZStack {
             Circle().fill(.ultraThinMaterial)
-
-            if accent || highlighted {
-                Circle()
-                    .fill(KenwoodPalette.accentButtonGradient)
-                    .opacity(accent ? 0.94 : 0.78)
-            } else {
-                Circle().fill(Color(red: 0.09, green: 0.10, blue: 0.15).opacity(0.58))
-            }
-
-            Circle()
-                .fill(KenwoodPalette.specularSheen)
-                .opacity(0.82)
-        }
-        .overlay(
+            Circle().fill((accent || highlighted) ? KenwoodPalette.crimson.opacity(0.70) : Color.white.opacity(0.06))
             Circle().strokeBorder(
-                (accent || highlighted) ? KenwoodPalette.glassAccentBorder : KenwoodPalette.glassBorderGradient,
-                lineWidth: (accent || highlighted) ? 1.3 : 1.0
+                (accent || highlighted) ? KenwoodPalette.neonRed.opacity(0.48) : Color.white.opacity(0.14),
+                lineWidth: 0.9
             )
-        )
-        .shadow(
-            color: (accent || highlighted) ? KenwoodPalette.crimson.opacity(0.42) : Color.black.opacity(0.35),
-            radius: (accent || highlighted) ? 12 : 7,
-            x: 0,
-            y: 4
-        )
+        }
     }
 }
 
@@ -187,55 +66,24 @@ private extension View {
     func kenwoodGlassPanel(
         cornerRadius: CGFloat = 22,
         highlighted: Bool = false,
-        interactive: Bool = true
+        interactive: Bool = false
     ) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        #if compiler(>=6.2)
-        if #available(iOS 26.0, *) {
-            let tint = highlighted
-                ? KenwoodPalette.crimson.opacity(0.72)
-                : KenwoodPalette.crimson.opacity(0.08)
-            if interactive {
-                self.glassEffect(.regular.tint(tint).interactive(), in: shape)
-            } else {
-                self.glassEffect(.regular.tint(tint), in: shape)
-            }
-        } else {
-            self.background(KenwoodGlassPanel(cornerRadius: cornerRadius, highlighted: highlighted))
-        }
-        #else
-        self.background(KenwoodGlassPanel(cornerRadius: cornerRadius, highlighted: highlighted))
-        #endif
+        self.nativeLiquidGlass(
+            in: shape,
+            tint: highlighted ? KenwoodPalette.crimson.opacity(0.65) : nil,
+            interactive: interactive
+        )
     }
 
     @ViewBuilder
     func kenwoodGlassCircle(
         highlighted: Bool = false,
         accent: Bool = false,
-        interactive: Bool = true
+        interactive: Bool = false
     ) -> some View {
-        #if compiler(>=6.2)
-        if #available(iOS 26.0, *) {
-            if accent || highlighted {
-                let tint = KenwoodPalette.crimson.opacity(accent ? 0.78 : 0.55)
-                if interactive {
-                    self.glassEffect(.regular.tint(tint).interactive(), in: Circle())
-                } else {
-                    self.glassEffect(.regular.tint(tint), in: Circle())
-                }
-            } else {
-                if interactive {
-                    self.glassEffect(.regular.interactive(), in: Circle())
-                } else {
-                    self.glassEffect(.regular, in: Circle())
-                }
-            }
-        } else {
-            self.background(KenwoodGlassCircle(highlighted: highlighted, accent: accent))
-        }
-        #else
-        self.background(KenwoodGlassCircle(highlighted: highlighted, accent: accent))
-        #endif
+        let tint: Color? = (accent || highlighted) ? KenwoodPalette.crimson.opacity(accent ? 0.72 : 0.48) : nil
+        self.nativeLiquidGlass(in: Circle(), tint: tint, interactive: interactive)
     }
 }
 
@@ -244,41 +92,15 @@ struct KenwoodPrimaryButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
-        #if compiler(>=6.2)
-        if #available(iOS 26.0, *) {
-            configuration.label
-                .foregroundStyle(.white.opacity(disabled ? 0.45 : 1.0))
-                .glassEffect(
-                    .regular.tint(KenwoodPalette.crimson.opacity(disabled ? 0.25 : 0.78)).interactive(!disabled),
-                    in: shape
-                )
-        } else {
-            legacyBody(configuration: configuration, shape: shape)
-        }
-        #else
-        legacyBody(configuration: configuration, shape: shape)
-        #endif
-    }
-
-    private func legacyBody(configuration: Configuration, shape: RoundedRectangle) -> some View {
         configuration.label
             .foregroundStyle(.white.opacity(disabled ? 0.45 : 1.0))
-            .background(
-                ZStack {
-                    shape
-                        .fill(KenwoodPalette.accentButtonGradient)
-                        .opacity(disabled ? 0.25 : 1.0)
-                    shape
-                        .fill(KenwoodPalette.specularSheen)
-                        .opacity(disabled ? 0.2 : 0.7)
-                    shape
-                        .strokeBorder(KenwoodPalette.glassAccentBorder, lineWidth: 1)
-                        .opacity(disabled ? 0.3 : 0.95)
-                }
+            .nativeLiquidGlass(
+                in: shape,
+                tint: KenwoodPalette.crimson.opacity(disabled ? 0.25 : 0.76),
+                interactive: !disabled
             )
-            .shadow(color: disabled ? .clear : KenwoodPalette.crimson.opacity(0.36), radius: 10, y: 4)
-            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed && !disabled ? 0.95 : 1.0)
+            .animation(NativeLiquidSpring.press, value: configuration.isPressed)
     }
 }
 
@@ -287,25 +109,11 @@ struct KenwoodGlassButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
-        #if compiler(>=6.2)
-        if #available(iOS 26.0, *) {
-            configuration.label
-                .foregroundStyle(.white.opacity(disabled ? 0.40 : 0.94))
-                .glassEffect(.regular.interactive(!disabled), in: shape)
-        } else {
-            legacyBody(configuration: configuration)
-        }
-        #else
-        legacyBody(configuration: configuration)
-        #endif
-    }
-
-    private func legacyBody(configuration: Configuration) -> some View {
         configuration.label
             .foregroundStyle(.white.opacity(disabled ? 0.40 : 0.94))
-            .background(KenwoodGlassPanel(cornerRadius: 18, highlighted: configuration.isPressed))
-            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .nativeLiquidGlass(in: shape, interactive: !disabled)
+            .scaleEffect(configuration.isPressed && !disabled ? 0.95 : 1.0)
+            .animation(NativeLiquidSpring.press, value: configuration.isPressed)
     }
 }
 
@@ -361,6 +169,7 @@ struct KenwoodRemoteView: View {
     @ObservedObject var kenwood: KenwoodRemoteManager
     let onBackToMenu: () -> Void
 
+    @Namespace private var tabNamespace
     @State private var selectedTab: KenwoodTab = .player
     @State private var audioSubtab: KenwoodAudioSubtab = .eq
     @State private var showConnectionSheet = false
@@ -481,44 +290,39 @@ struct KenwoodRemoteView: View {
                     .padding(.bottom, 20)
                 }
 
-                // Нижняя стеклянная панель 4 вкладок в стиле KENWOOD
-                HStack(spacing: 6) {
-                    ForEach(KenwoodTab.allCases) { tab in
-                        let active = tab == selectedTab
-                        Button {
-                            Haptics.tap()
-                            withAnimation(.easeInOut(duration: 0.18)) {
-                                selectedTab = tab
-                            }
-                        } label: {
-                            VStack(spacing: 3) {
-                                Image(systemName: tab.symbol)
-                                    .font(.system(size: 16, weight: .semibold))
-                                Text(tab.title)
-                                    .font(.system(size: 10, weight: .bold))
-                            }
-                            .foregroundStyle(active ? .white : .white.opacity(0.55))
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 48)
-                            .background(
-                                Group {
-                                    if active {
-                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                            .fill(KenwoodPalette.accentButtonGradient)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                                    .strokeBorder(KenwoodPalette.glassAccentBorder, lineWidth: 1)
-                                            )
-                                            .shadow(color: KenwoodPalette.crimson.opacity(0.45), radius: 8, y: 2)
-                                    }
+                // Нижняя стеклянная панель 4 вкладок в нативном Liquid Glass
+                NativeGlassContainer(spacing: 6) {
+                    HStack(spacing: 6) {
+                        ForEach(KenwoodTab.allCases) { tab in
+                            let active = tab == selectedTab
+                            Button {
+                                Haptics.tap()
+                                withAnimation(NativeLiquidSpring.morph) {
+                                    selectedTab = tab
                                 }
-                            )
+                            } label: {
+                                VStack(spacing: 3) {
+                                    Image(systemName: tab.symbol)
+                                        .font(.system(size: 16, weight: .semibold))
+                                    Text(tab.title)
+                                        .font(.system(size: 10, weight: .bold))
+                                }
+                                .foregroundStyle(active ? .white : .white.opacity(0.55))
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 48)
+                                .nativeLiquidGlass(
+                                    in: RoundedRectangle(cornerRadius: 18, style: .continuous),
+                                    tint: active ? KenwoodPalette.crimson.opacity(0.75) : nil,
+                                    interactive: true
+                                )
+                                .nativeGlassID(active ? "activeTab" : tab.id, in: tabNamespace)
+                            }
+                            .buttonStyle(RemotePressStyle())
                         }
-                        .buttonStyle(.plain)
                     }
+                    .padding(5)
+                    .nativeLiquidGlass(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                 }
-                .padding(5)
-                .background(KenwoodGlassPanel(cornerRadius: 22))
                 .padding(.horizontal, 16)
                 .padding(.bottom, 8)
                 .padding(.top, 4)
@@ -540,13 +344,12 @@ struct KenwoodRemoteView: View {
             showConnectionSheet = true
         } label: {
             HStack(spacing: 12) {
-                ZStack {
-                    KenwoodGlassCircle(accent: true)
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "car.fill")
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(.white)
-                }
+                Image(systemName: "car.fill")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 40, height: 40)
+                    .kenwoodGlassCircle(accent: true)
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Подключить ресивер KENWOOD")
                         .font(.subheadline.weight(.bold))
@@ -562,7 +365,7 @@ struct KenwoodRemoteView: View {
                     .foregroundStyle(.white.opacity(0.5))
             }
             .padding(12)
-            .background(KenwoodGlassPanel(cornerRadius: 20))
+            .kenwoodGlassPanel(cornerRadius: 20, interactive: true)
         }
         .buttonStyle(RemotePressStyle())
     }
@@ -597,7 +400,7 @@ struct KenwoodRemoteView: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(Capsule().fill(KenwoodPalette.accentButtonGradient))
+                    .nativeLiquidGlass(in: Capsule(), tint: KenwoodPalette.crimson.opacity(0.76))
 
                     // Индикатор EQ
                     Text(kenwood.selectedEQPreset.title)
@@ -691,72 +494,74 @@ struct KenwoodRemoteView: View {
                 )
 
                 // Точный ползунок громкости + быстрые кнопки − / +
-                HStack(spacing: 10) {
-                    Button {
-                        Haptics.tap()
-                        kenwood.volumeDown()
-                    } label: {
-                        Image(systemName: "speaker.wave.1.fill")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 36, height: 36)
-                            .background(KenwoodGlassCircle())
-                    }
-                    .buttonStyle(RemotePressStyle())
+                NativeGlassContainer(spacing: 10) {
+                    HStack(spacing: 10) {
+                        Button {
+                            Haptics.tap()
+                            kenwood.volumeDown()
+                        } label: {
+                            Image(systemName: "speaker.wave.1.fill")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 36, height: 36)
+                                .kenwoodGlassCircle(interactive: true)
+                        }
+                        .buttonStyle(RemotePressStyle())
 
-                    Slider(
-                        value: Binding(
-                            get: { Double(kenwood.volume) },
-                            set: { kenwood.setVolume(Int($0.rounded())) }
-                        ),
-                        in: 0...35,
-                        step: 1
-                    )
-                    .tint(KenwoodPalette.neonRed)
+                        Slider(
+                            value: Binding(
+                                get: { Double(kenwood.volume) },
+                                set: { kenwood.setVolume(Int($0.rounded())) }
+                            ),
+                            in: 0...35,
+                            step: 1
+                        )
+                        .tint(KenwoodPalette.neonRed)
 
-                    Button {
-                        Haptics.tap()
-                        kenwood.volumeUp()
-                    } label: {
-                        Image(systemName: "speaker.wave.3.fill")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 36, height: 36)
-                            .background(KenwoodGlassCircle())
+                        Button {
+                            Haptics.tap()
+                            kenwood.volumeUp()
+                        } label: {
+                            Image(systemName: "speaker.wave.3.fill")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 36, height: 36)
+                                .kenwoodGlassCircle(interactive: true)
+                        }
+                        .buttonStyle(RemotePressStyle())
                     }
-                    .buttonStyle(RemotePressStyle())
                 }
             }
             .padding(16)
-            .background(KenwoodGlassPanel(cornerRadius: 24, accentGlow: illuminationColor))
+            .kenwoodGlassPanel(cornerRadius: 24)
 
             // Селектор источников KENWOOD
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(KenwoodSource.allCases) { source in
-                        let selected = source == kenwood.currentSource
-                        Button {
-                            Haptics.tap()
-                            kenwood.selectSource(source)
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: source.symbol)
-                                    .font(.system(size: 12, weight: .bold))
-                                Text(source.title)
-                                    .font(.caption.weight(.bold))
+                NativeGlassContainer(spacing: 8) {
+                    HStack(spacing: 8) {
+                        ForEach(KenwoodSource.allCases) { source in
+                            let selected = source == kenwood.currentSource
+                            Button {
+                                Haptics.tap()
+                                kenwood.selectSource(source)
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: source.symbol)
+                                        .font(.system(size: 12, weight: .bold))
+                                    Text(source.title)
+                                        .font(.caption.weight(.bold))
+                                }
+                                .foregroundStyle(selected ? .white : .white.opacity(0.74))
+                                .padding(.horizontal, 13)
+                                .padding(.vertical, 9)
+                                .nativeLiquidGlass(
+                                    in: Capsule(),
+                                    tint: selected ? KenwoodPalette.crimson.opacity(0.76) : nil,
+                                    interactive: true
+                                )
                             }
-                            .foregroundStyle(selected ? .white : .white.opacity(0.68))
-                            .padding(.horizontal, 13)
-                            .padding(.vertical, 9)
-                            .background(
-                                Capsule()
-                                    .fill(selected ? AnyShapeStyle(KenwoodPalette.accentButtonGradient) : AnyShapeStyle(Color.white.opacity(0.08)))
-                                    .overlay(
-                                        Capsule().strokeBorder(selected ? KenwoodPalette.glassAccentBorder : KenwoodPalette.glassBorderGradient, lineWidth: 1)
-                                    )
-                            )
+                            .buttonStyle(RemotePressStyle())
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -798,135 +603,133 @@ struct KenwoodRemoteView: View {
     }
 
     private var mediaTransportCard: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 10) {
-                Button {
-                    Haptics.tap()
-                    kenwood.previousTrack()
-                } label: {
-                    Image(systemName: "backward.end.fill")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 52)
-                        .background(KenwoodGlassPanel(cornerRadius: 18))
-                }
-                .buttonStyle(RemotePressStyle())
-
-                Button {
-                    Haptics.medium()
-                    kenwood.playPause()
-                } label: {
-                    Image(systemName: kenwood.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 84, height: 56)
-                        .background(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .fill(KenwoodPalette.accentButtonGradient)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                        .strokeBorder(KenwoodPalette.glassAccentBorder, lineWidth: 1)
-                                )
-                        )
-                        .shadow(color: KenwoodPalette.crimson.opacity(0.45), radius: 10, y: 4)
-                }
-                .buttonStyle(RemotePressStyle())
-
-                Button {
-                    Haptics.tap()
-                    kenwood.nextTrack()
-                } label: {
-                    Image(systemName: "forward.end.fill")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 52)
-                        .background(KenwoodGlassPanel(cornerRadius: 18))
-                }
-                .buttonStyle(RemotePressStyle())
-            }
-
-            HStack(spacing: 8) {
-                compactTransportButton(symbol: "folder.fill", title: "Папка −") {
-                    kenwood.folderDown()
-                }
-                compactTransportButton(symbol: "folder.fill", title: "Папка +") {
-                    kenwood.folderUp()
-                }
-                compactTransportButton(
-                    symbol: "repeat",
-                    title: kenwood.repeatMode == 0 ? "Повтор" : (kenwood.repeatMode == 1 ? "1 трек" : "Все"),
-                    active: kenwood.repeatMode > 0
-                ) {
-                    kenwood.cycleRepeat()
-                }
-                compactTransportButton(
-                    symbol: "shuffle",
-                    title: "Микс",
-                    active: kenwood.randomEnabled
-                ) {
-                    kenwood.toggleRandom()
-                }
-            }
-        }
-        .padding(14)
-        .background(KenwoodGlassPanel(cornerRadius: 22))
-    }
-
-    private var tunerControlCard: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 8) {
-                compactTransportButton(symbol: "backward.fill", title: "Seek −") {
-                    kenwood.tunerSeekDown()
-                }
-                compactTransportButton(symbol: "minus", title: "Freq −") {
-                    kenwood.tunerFreqDown()
-                }
-                compactTransportButton(symbol: "plus", title: "Freq +") {
-                    kenwood.tunerFreqUp()
-                }
-                compactTransportButton(symbol: "forward.fill", title: "Seek +") {
-                    kenwood.tunerSeekUp()
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Пресеты тюнера (удержание — сохранить)")
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.55))
-
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
-                    ForEach(1...6, id: \.self) { num in
-                        let active = kenwood.activeTunerPreset == num
-                        Text("P\(num)")
-                            .font(.subheadline.weight(.black))
-                            .foregroundStyle(active ? .white : .white.opacity(0.8))
+        NativeGlassContainer(spacing: 10) {
+            VStack(spacing: 12) {
+                HStack(spacing: 10) {
+                    Button {
+                        Haptics.tap()
+                        kenwood.previousTrack()
+                    } label: {
+                        Image(systemName: "backward.end.fill")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
-                            .frame(height: 42)
-                            .background(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(active ? AnyShapeStyle(KenwoodPalette.accentButtonGradient) : AnyShapeStyle(Color.white.opacity(0.08)))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                            .strokeBorder(active ? KenwoodPalette.glassAccentBorder : KenwoodPalette.glassBorderGradient, lineWidth: 1)
-                                    )
+                            .frame(height: 52)
+                            .kenwoodGlassPanel(cornerRadius: 18, interactive: true)
+                    }
+                    .buttonStyle(RemotePressStyle())
+
+                    Button {
+                        Haptics.medium()
+                        kenwood.playPause()
+                    } label: {
+                        Image(systemName: kenwood.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundStyle(.white)
+                            .nativeSymbolReplaceTransition()
+                            .frame(width: 84, height: 56)
+                            .nativeLiquidGlass(
+                                in: RoundedRectangle(cornerRadius: 20, style: .continuous),
+                                tint: KenwoodPalette.crimson.opacity(0.78),
+                                interactive: true
                             )
-                            .onTapGesture {
-                                Haptics.tap()
-                                kenwood.tunerSelectPreset(num)
-                            }
-                            .onLongPressGesture(minimumDuration: 0.6) {
-                                Haptics.heavy()
-                                kenwood.tunerSavePreset(num)
-                                showGestureFeedback("Станция сохранена в P\(num)")
-                            }
+                    }
+                    .buttonStyle(RemotePressStyle())
+
+                    Button {
+                        Haptics.tap()
+                        kenwood.nextTrack()
+                    } label: {
+                        Image(systemName: "forward.end.fill")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 52)
+                            .kenwoodGlassPanel(cornerRadius: 18, interactive: true)
+                    }
+                    .buttonStyle(RemotePressStyle())
+                }
+
+                HStack(spacing: 8) {
+                    compactTransportButton(symbol: "folder.fill", title: "Папка −") {
+                        kenwood.folderDown()
+                    }
+                    compactTransportButton(symbol: "folder.fill", title: "Папка +") {
+                        kenwood.folderUp()
+                    }
+                    compactTransportButton(
+                        symbol: "repeat",
+                        title: kenwood.repeatMode == 0 ? "Повтор" : (kenwood.repeatMode == 1 ? "1 трек" : "Все"),
+                        active: kenwood.repeatMode > 0
+                    ) {
+                        kenwood.cycleRepeat()
+                    }
+                    compactTransportButton(
+                        symbol: "shuffle",
+                        title: "Микс",
+                        active: kenwood.randomEnabled
+                    ) {
+                        kenwood.toggleRandom()
                     }
                 }
             }
+            .padding(14)
+            .kenwoodGlassPanel(cornerRadius: 22)
         }
-        .padding(14)
-        .background(KenwoodGlassPanel(cornerRadius: 22))
+    }
+
+    private var tunerControlCard: some View {
+        NativeGlassContainer(spacing: 8) {
+            VStack(spacing: 12) {
+                HStack(spacing: 8) {
+                    compactTransportButton(symbol: "backward.fill", title: "Seek −") {
+                        kenwood.tunerSeekDown()
+                    }
+                    compactTransportButton(symbol: "minus", title: "Freq −") {
+                        kenwood.tunerFreqDown()
+                    }
+                    compactTransportButton(symbol: "plus", title: "Freq +") {
+                        kenwood.tunerFreqUp()
+                    }
+                    compactTransportButton(symbol: "forward.fill", title: "Seek +") {
+                        kenwood.tunerSeekUp()
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Пресеты тюнера (удержание — сохранить)")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.55))
+
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                        ForEach(1...6, id: \.self) { num in
+                            let active = kenwood.activeTunerPreset == num
+                            Text("P\(num)")
+                                .font(.subheadline.weight(.black))
+                                .foregroundStyle(active ? .white : .white.opacity(0.84))
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 42)
+                                .nativeLiquidGlass(
+                                    in: RoundedRectangle(cornerRadius: 14, style: .continuous),
+                                    tint: active ? KenwoodPalette.crimson.opacity(0.76) : nil,
+                                    interactive: true
+                                )
+                                .onTapGesture {
+                                    Haptics.tap()
+                                    kenwood.tunerSelectPreset(num)
+                                }
+                                .onLongPressGesture(minimumDuration: 0.6) {
+                                    Haptics.heavy()
+                                    kenwood.tunerSavePreset(num)
+                                    showGestureFeedback("Станция сохранена в P\(num)")
+                                }
+                        }
+                    }
+                }
+            }
+            .padding(14)
+            .kenwoodGlassPanel(cornerRadius: 22)
+        }
     }
 
     private func compactTransportButton(symbol: String, title: String, active: Bool = false, action: @escaping () -> Void) -> some View {
@@ -941,10 +744,10 @@ struct KenwoodRemoteView: View {
                     .font(.system(size: 10, weight: .semibold))
                     .lineLimit(1)
             }
-            .foregroundStyle(active ? .white : .white.opacity(0.82))
+            .foregroundStyle(active ? .white : .white.opacity(0.84))
             .frame(maxWidth: .infinity)
             .frame(height: 46)
-            .background(KenwoodGlassPanel(cornerRadius: 14, highlighted: active))
+            .kenwoodGlassPanel(cornerRadius: 14, highlighted: active, interactive: true)
         }
         .buttonStyle(RemotePressStyle())
     }
@@ -1011,24 +814,21 @@ struct KenwoodRemoteView: View {
                         } label: {
                             Text(preset.title)
                                 .font(.caption.weight(.bold))
-                                .foregroundStyle(selected ? .white : .white.opacity(0.74))
+                                .foregroundStyle(selected ? .white : .white.opacity(0.76))
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 38)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .fill(selected ? AnyShapeStyle(KenwoodPalette.accentButtonGradient) : AnyShapeStyle(Color.white.opacity(0.07)))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                                .strokeBorder(selected ? KenwoodPalette.glassAccentBorder : KenwoodPalette.glassBorderGradient, lineWidth: 1)
-                                        )
+                                .nativeLiquidGlass(
+                                    in: RoundedRectangle(cornerRadius: 14, style: .continuous),
+                                    tint: selected ? KenwoodPalette.crimson.opacity(0.76) : nil,
+                                    interactive: true
                                 )
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(RemotePressStyle())
                     }
                 }
             }
             .padding(14)
-            .background(KenwoodGlassPanel(cornerRadius: 22))
+            .kenwoodGlassPanel(cornerRadius: 22)
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
@@ -1056,7 +856,7 @@ struct KenwoodRemoteView: View {
                 }
             }
             .padding(14)
-            .background(KenwoodGlassPanel(cornerRadius: 22))
+            .kenwoodGlassPanel(cornerRadius: 22)
         }
     }
 
@@ -1080,7 +880,7 @@ struct KenwoodRemoteView: View {
                 .foregroundStyle(KenwoodPalette.iceBlue)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(KenwoodGlassPanel(cornerRadius: 14))
+                .kenwoodGlassPanel(cornerRadius: 14, interactive: true)
             }
 
             KenwoodCabinFaderPad(
@@ -1102,7 +902,7 @@ struct KenwoodRemoteView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(12)
-                .background(KenwoodGlassPanel(cornerRadius: 16))
+                .kenwoodGlassPanel(cornerRadius: 16)
 
                 VStack(spacing: 4) {
                     Text("Баланс (L / R)")
@@ -1114,11 +914,11 @@ struct KenwoodRemoteView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(12)
-                .background(KenwoodGlassPanel(cornerRadius: 16))
+                .kenwoodGlassPanel(cornerRadius: 16)
             }
         }
         .padding(14)
-        .background(KenwoodGlassPanel(cornerRadius: 22))
+        .kenwoodGlassPanel(cornerRadius: 22)
     }
 
     private var subwooferAndEffectsSection: some View {
@@ -1176,7 +976,7 @@ struct KenwoodRemoteView: View {
                 }
             }
             .padding(14)
-            .background(KenwoodGlassPanel(cornerRadius: 22))
+            .kenwoodGlassPanel(cornerRadius: 22)
 
             VStack(alignment: .leading, spacing: 14) {
                 Text("Звуковые эффекты")
@@ -1202,15 +1002,16 @@ struct KenwoodRemoteView: View {
                             } label: {
                                 Text(lvl == 0 ? "OFF" : "\(lvl)")
                                     .font(.caption.weight(.bold))
-                                    .foregroundStyle(active ? .white : .white.opacity(0.7))
+                                    .foregroundStyle(active ? .white : .white.opacity(0.74))
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 36)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                            .fill(active ? AnyShapeStyle(KenwoodPalette.accentButtonGradient) : AnyShapeStyle(Color.white.opacity(0.08)))
+                                    .nativeLiquidGlass(
+                                        in: RoundedRectangle(cornerRadius: 12, style: .continuous),
+                                        tint: active ? KenwoodPalette.crimson.opacity(0.76) : nil,
+                                        interactive: true
                                     )
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(RemotePressStyle())
                         }
                     }
                 }
@@ -1228,15 +1029,16 @@ struct KenwoodRemoteView: View {
                             } label: {
                                 Text(pair.1)
                                     .font(.caption.weight(.bold))
-                                    .foregroundStyle(active ? .white : .white.opacity(0.72))
+                                    .foregroundStyle(active ? .white : .white.opacity(0.74))
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 38)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                            .fill(active ? AnyShapeStyle(KenwoodPalette.accentButtonGradient) : AnyShapeStyle(Color.white.opacity(0.08)))
+                                    .nativeLiquidGlass(
+                                        in: RoundedRectangle(cornerRadius: 12, style: .continuous),
+                                        tint: active ? KenwoodPalette.crimson.opacity(0.76) : nil,
+                                        interactive: true
                                     )
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(RemotePressStyle())
                         }
                     }
                 }
@@ -1252,7 +1054,7 @@ struct KenwoodRemoteView: View {
                 .tint(KenwoodPalette.neonRed)
             }
             .padding(14)
-            .background(KenwoodGlassPanel(cornerRadius: 22))
+            .kenwoodGlassPanel(cornerRadius: 22)
         }
     }
 
@@ -1263,15 +1065,16 @@ struct KenwoodRemoteView: View {
         } label: {
             Text(title)
                 .font(.caption2.weight(.bold))
-                .foregroundStyle(selected ? .white : .white.opacity(0.72))
+                .foregroundStyle(selected ? .white : .white.opacity(0.74))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 7)
-                .background(
-                    Capsule()
-                        .fill(selected ? AnyShapeStyle(KenwoodPalette.accentButtonGradient) : AnyShapeStyle(Color.white.opacity(0.08)))
+                .nativeLiquidGlass(
+                    in: Capsule(),
+                    tint: selected ? KenwoodPalette.crimson.opacity(0.76) : nil,
+                    interactive: true
                 )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(RemotePressStyle())
     }
 
     private var dtaAndCrossoverSection: some View {
@@ -1290,15 +1093,16 @@ struct KenwoodRemoteView: View {
                         } label: {
                             Text(pos.title)
                                 .font(.caption.weight(.bold))
-                                .foregroundStyle(active ? .white : .white.opacity(0.74))
+                                .foregroundStyle(active ? .white : .white.opacity(0.76))
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 38)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(active ? AnyShapeStyle(KenwoodPalette.accentButtonGradient) : AnyShapeStyle(Color.white.opacity(0.08)))
+                                .nativeLiquidGlass(
+                                    in: RoundedRectangle(cornerRadius: 12, style: .continuous),
+                                    tint: active ? KenwoodPalette.crimson.opacity(0.76) : nil,
+                                    interactive: true
                                 )
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(RemotePressStyle())
                     }
                 }
 
@@ -1327,7 +1131,7 @@ struct KenwoodRemoteView: View {
                 }
             }
             .padding(14)
-            .background(KenwoodGlassPanel(cornerRadius: 22))
+            .kenwoodGlassPanel(cornerRadius: 22)
 
             VStack(alignment: .leading, spacing: 12) {
                 Text("Кроссовер (HPF / LPF)")
@@ -1358,21 +1162,22 @@ struct KenwoodRemoteView: View {
                             } label: {
                                 Text("−\(slope) dB")
                                     .font(.caption.weight(.bold))
-                                    .foregroundStyle(active ? .white : .white.opacity(0.7))
+                                    .foregroundStyle(active ? .white : .white.opacity(0.74))
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 36)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                            .fill(active ? AnyShapeStyle(KenwoodPalette.accentButtonGradient) : AnyShapeStyle(Color.white.opacity(0.08)))
+                                    .nativeLiquidGlass(
+                                        in: RoundedRectangle(cornerRadius: 12, style: .continuous),
+                                        tint: active ? KenwoodPalette.crimson.opacity(0.76) : nil,
+                                        interactive: true
                                     )
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(RemotePressStyle())
                         }
                     }
                 }
             }
             .padding(14)
-            .background(KenwoodGlassPanel(cornerRadius: 22))
+            .kenwoodGlassPanel(cornerRadius: 22)
         }
     }
 
@@ -1417,81 +1222,89 @@ struct KenwoodRemoteView: View {
                 }
             }
             .padding(12)
-            .background(KenwoodGlassPanel(cornerRadius: 18))
+            .kenwoodGlassPanel(cornerRadius: 18)
 
-            HStack(spacing: 8) {
-                remoconTile("SRC", symbol: "square.stack.fill") { kenwood.cycleSource() }
-                remoconTile("ATT", symbol: "speaker.slash.fill") { kenwood.toggleMute() }
-                remoconTile("AUDIO", symbol: "slider.horizontal.3") { kenwood.sendRemoconKey(.audio) }
-                remoconTile("MENU", symbol: "line.3.horizontal") { kenwood.sendRemoconKey(.menu) }
-            }
-
-            // Фирменный круговой джойстик KENWOOD
-            VStack(spacing: 10) {
-                remoconCircle(symbol: "chevron.up", size: 58) { kenwood.sendRemoconKey(.up) }
-                HStack(spacing: 14) {
-                    remoconCircle(symbol: "chevron.left", size: 58) { kenwood.sendRemoconKey(.left) }
-                    Button {
-                        Haptics.medium()
-                        kenwood.sendRemoconKey(.enter)
-                    } label: {
-                        Text("ENT")
-                            .font(.headline.weight(.black))
-                            .foregroundStyle(.white)
-                            .frame(width: 74, height: 74)
-                            .background(KenwoodGlassCircle(accent: true))
-                    }
-                    .buttonStyle(RemotePressStyle())
-                    remoconCircle(symbol: "chevron.right", size: 58) { kenwood.sendRemoconKey(.right) }
+            NativeGlassContainer(spacing: 8) {
+                HStack(spacing: 8) {
+                    remoconTile("SRC", symbol: "square.stack.fill") { kenwood.cycleSource() }
+                    remoconTile("ATT", symbol: "speaker.slash.fill") { kenwood.toggleMute() }
+                    remoconTile("AUDIO", symbol: "slider.horizontal.3") { kenwood.sendRemoconKey(.audio) }
+                    remoconTile("MENU", symbol: "line.3.horizontal") { kenwood.sendRemoconKey(.menu) }
                 }
-                remoconCircle(symbol: "chevron.down", size: 58) { kenwood.sendRemoconKey(.down) }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(KenwoodGlassPanel(cornerRadius: 26))
-
-            HStack(spacing: 8) {
-                remoconTile("Назад", symbol: "arrow.uturn.backward") { kenwood.sendRemoconKey(.back) }
-                remoconTile("FM", symbol: "radio.fill") { kenwood.sendRemoconKey(.fm) }
-                remoconTile("AM", symbol: "antenna.radiowaves.left.and.right") { kenwood.sendRemoconKey(.am) }
-                remoconTile("2-Zone", symbol: "rectangle.split.2x1.fill") { kenwood.sendRemoconKey(.twoZone) }
             }
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
-                ForEach(1...9, id: \.self) { digit in
+            // Фирменный круговой джойстик KENWOOD в нативном Liquid Glass
+            NativeGlassContainer(spacing: 12) {
+                VStack(spacing: 10) {
+                    remoconCircle(symbol: "chevron.up", size: 58) { kenwood.sendRemoconKey(.up) }
+                    HStack(spacing: 14) {
+                        remoconCircle(symbol: "chevron.left", size: 58) { kenwood.sendRemoconKey(.left) }
+                        Button {
+                            Haptics.medium()
+                            kenwood.sendRemoconKey(.enter)
+                        } label: {
+                            Text("ENT")
+                                .font(.headline.weight(.black))
+                                .foregroundStyle(.white)
+                                .frame(width: 74, height: 74)
+                                .kenwoodGlassCircle(accent: true, interactive: true)
+                        }
+                        .buttonStyle(RemotePressStyle())
+                        remoconCircle(symbol: "chevron.right", size: 58) { kenwood.sendRemoconKey(.right) }
+                    }
+                    remoconCircle(symbol: "chevron.down", size: 58) { kenwood.sendRemoconKey(.down) }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .kenwoodGlassPanel(cornerRadius: 26)
+            }
+
+            NativeGlassContainer(spacing: 8) {
+                HStack(spacing: 8) {
+                    remoconTile("Назад", symbol: "arrow.uturn.backward") { kenwood.sendRemoconKey(.back) }
+                    remoconTile("FM", symbol: "radio.fill") { kenwood.sendRemoconKey(.fm) }
+                    remoconTile("AM", symbol: "antenna.radiowaves.left.and.right") { kenwood.sendRemoconKey(.am) }
+                    remoconTile("2-Zone", symbol: "rectangle.split.2x1.fill") { kenwood.sendRemoconKey(.twoZone) }
+                }
+            }
+
+            NativeGlassContainer(spacing: 8) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                    ForEach(1...9, id: \.self) { digit in
+                        Button {
+                            Haptics.tap()
+                            kenwood.sendRemoconKey(.digit(digit))
+                        } label: {
+                            Text("\(digit)")
+                                .font(.title3.weight(.bold))
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 46)
+                                .kenwoodGlassPanel(cornerRadius: 16, interactive: true)
+                        }
+                        .buttonStyle(RemotePressStyle())
+                    }
+
+                    remoconTile("Direct", symbol: "magnifyingglass") { kenwood.sendRemoconKey(.direct) }
+
                     Button {
                         Haptics.tap()
-                        kenwood.sendRemoconKey(.digit(digit))
+                        kenwood.sendRemoconKey(.digit(0))
                     } label: {
-                        Text("\(digit)")
+                        Text("0")
                             .font(.title3.weight(.bold))
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
                             .frame(height: 46)
-                            .background(KenwoodGlassPanel(cornerRadius: 16))
+                            .kenwoodGlassPanel(cornerRadius: 16, interactive: true)
                     }
                     .buttonStyle(RemotePressStyle())
+
+                    remoconTile("Top", symbol: "house.fill") { kenwood.sendRemoconKey(.topMenu) }
                 }
-
-                remoconTile("Direct", symbol: "magnifyingglass") { kenwood.sendRemoconKey(.direct) }
-
-                Button {
-                    Haptics.tap()
-                    kenwood.sendRemoconKey(.digit(0))
-                } label: {
-                    Text("0")
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 46)
-                        .background(KenwoodGlassPanel(cornerRadius: 16))
-                }
-                .buttonStyle(RemotePressStyle())
-
-                remoconTile("Top", symbol: "house.fill") { kenwood.sendRemoconKey(.topMenu) }
+                .padding(12)
+                .kenwoodGlassPanel(cornerRadius: 22)
             }
-            .padding(12)
-            .background(KenwoodGlassPanel(cornerRadius: 22))
         }
     }
 
@@ -1510,7 +1323,7 @@ struct KenwoodRemoteView: View {
             .foregroundStyle(.white.opacity(0.9))
             .frame(maxWidth: .infinity)
             .frame(height: 46)
-            .background(KenwoodGlassPanel(cornerRadius: 15))
+            .kenwoodGlassPanel(cornerRadius: 15, interactive: true)
         }
         .buttonStyle(RemotePressStyle())
     }
@@ -1524,7 +1337,7 @@ struct KenwoodRemoteView: View {
                 .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(width: size, height: size)
-                .background(KenwoodGlassCircle())
+                .kenwoodGlassCircle(interactive: true)
         }
         .buttonStyle(RemotePressStyle())
     }
@@ -1543,7 +1356,6 @@ struct KenwoodRemoteView: View {
                         .fill(illuminationColor)
                         .frame(width: 24, height: 24)
                         .overlay(Circle().strokeBorder(.white.opacity(0.55), lineWidth: 1.5))
-                        .shadow(color: illuminationColor.opacity(0.9), radius: 8)
                 }
 
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 6), spacing: 10) {
@@ -1561,7 +1373,6 @@ struct KenwoodRemoteView: View {
                                         Circle()
                                             .strokeBorder(selected ? Color.white : Color.white.opacity(0.22), lineWidth: selected ? 2.5 : 1)
                                     )
-                                    .shadow(color: selected ? preset.swiftUIColor.opacity(0.85) : .clear, radius: 7)
                                 if selected {
                                     Image(systemName: "checkmark")
                                         .font(.system(size: 12, weight: .bold))
@@ -1569,12 +1380,12 @@ struct KenwoodRemoteView: View {
                                 }
                             }
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(RemotePressStyle())
                     }
                 }
             }
             .padding(14)
-            .background(KenwoodGlassPanel(cornerRadius: 22))
+            .kenwoodGlassPanel(cornerRadius: 22)
 
             VStack(alignment: .leading, spacing: 10) {
                 Text("Свой цвет (RGB 0–31)")
@@ -1592,7 +1403,7 @@ struct KenwoodRemoteView: View {
                 }
             }
             .padding(14)
-            .background(KenwoodGlassPanel(cornerRadius: 22))
+            .kenwoodGlassPanel(cornerRadius: 22)
 
             VStack(alignment: .leading, spacing: 12) {
                 Text("Автомобиль и синхронизация")
@@ -1608,44 +1419,47 @@ struct KenwoodRemoteView: View {
                         } label: {
                             Text(type.title)
                                 .font(.caption.weight(.bold))
-                                .foregroundStyle(active ? .white : .white.opacity(0.74))
+                                .foregroundStyle(active ? .white : .white.opacity(0.76))
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 36)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(active ? AnyShapeStyle(KenwoodPalette.accentButtonGradient) : AnyShapeStyle(Color.white.opacity(0.08)))
+                                .nativeLiquidGlass(
+                                    in: RoundedRectangle(cornerRadius: 12, style: .continuous),
+                                    tint: active ? KenwoodPalette.crimson.opacity(0.76) : nil,
+                                    interactive: true
                                 )
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(RemotePressStyle())
                     }
                 }
 
-                HStack(spacing: 10) {
-                    Button {
-                        Haptics.medium()
-                        kenwood.syncClockAndDate()
-                    } label: {
-                        Label("Синхр. часы", systemImage: "clock.arrow.2.circlepath")
-                            .font(.caption.weight(.bold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                    }
-                    .buttonStyle(KenwoodPrimaryButtonStyle())
+                NativeGlassContainer(spacing: 10) {
+                    HStack(spacing: 10) {
+                        Button {
+                            Haptics.medium()
+                            kenwood.syncClockAndDate()
+                        } label: {
+                            Label("Синхр. часы", systemImage: "clock.arrow.2.circlepath")
+                                .font(.caption.weight(.bold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                        }
+                        .buttonStyle(KenwoodPrimaryButtonStyle())
 
-                    Button {
-                        Haptics.tap()
-                        kenwood.switchBTAudioDevice()
-                    } label: {
-                        Label("Смена BT", systemImage: "arrow.left.arrow.right")
-                            .font(.caption.weight(.bold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
+                        Button {
+                            Haptics.tap()
+                            kenwood.switchBTAudioDevice()
+                        } label: {
+                            Label("Смена BT", systemImage: "arrow.left.arrow.right")
+                                .font(.caption.weight(.bold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                        }
+                        .buttonStyle(KenwoodGlassButtonStyle())
                     }
-                    .buttonStyle(KenwoodGlassButtonStyle())
                 }
             }
             .padding(14)
-            .background(KenwoodGlassPanel(cornerRadius: 22))
+            .kenwoodGlassPanel(cornerRadius: 22)
         }
     }
 
@@ -1704,19 +1518,7 @@ private struct KenwoodRotaryVolumeKnob: View {
                 .rotationEffect(.degrees(90))
                 .shadow(color: ringColor.opacity(0.8), radius: 6)
 
-            // Стеклянный корпус ручки
-            Circle()
-                .fill(.ultraThinMaterial)
-                .frame(width: 60, height: 60)
-                .overlay(
-                    Circle()
-                        .fill(Color.black.opacity(0.45))
-                )
-                .overlay(
-                    Circle()
-                        .strokeBorder(KenwoodPalette.glassBorderGradient, lineWidth: 1)
-                )
-
+            // Стеклянный корпус ручки в нативном Liquid Glass
             VStack(spacing: 1) {
                 Text(isMuted ? "ATT" : "\(volume)")
                     .font(.system(size: 18, weight: .black, design: .rounded))
@@ -1725,6 +1527,8 @@ private struct KenwoodRotaryVolumeKnob: View {
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.5))
             }
+            .frame(width: 60, height: 60)
+            .nativeLiquidGlass(in: Circle(), interactive: true)
         }
         .frame(width: 78, height: 78)
         .contentShape(Circle())
@@ -1773,11 +1577,9 @@ private struct KenwoodGesturePad: View {
 
     var body: some View {
         ZStack {
-            KenwoodGlassPanel(cornerRadius: 24)
-
             if let pt = dragPoint {
                 Circle()
-                    .fill(glowColor.opacity(0.32))
+                    .fill(glowColor.opacity(0.28))
                     .frame(width: 78, height: 78)
                     .blur(radius: 12)
                     .position(pt)
@@ -1786,7 +1588,7 @@ private struct KenwoodGesturePad: View {
             VStack(spacing: 8) {
                 Image(systemName: "hand.draw.fill")
                     .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(KenwoodPalette.brandGradient)
+                    .foregroundStyle(KenwoodPalette.neonRed)
 
                 Text(hintText ?? (isRadio ? "Свайп ◄► поиск станции · ▲▼ громкость" : "Свайп ◄► трек · ▲▼ громкость · Тап пауза"))
                     .font(.caption.weight(.semibold))
@@ -1795,7 +1597,9 @@ private struct KenwoodGesturePad: View {
                     .padding(.horizontal, 12)
             }
         }
+        .frame(maxWidth: .infinity)
         .frame(height: 118)
+        .nativeLiquidGlass(in: RoundedRectangle(cornerRadius: 24, style: .continuous), interactive: true)
         .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .gesture(
             DragGesture(minimumDistance: 0)
@@ -1848,7 +1652,7 @@ private struct KenwoodEQBandSlider: View {
                         .frame(width: 6)
 
                     Capsule()
-                        .fill(value >= 0 ? KenwoodPalette.accentButtonGradient : KenwoodPalette.cyanGradient)
+                        .fill(value >= 0 ? KenwoodPalette.neonRed : KenwoodPalette.cyan)
                         .frame(width: 6, height: max(abs(thumbY - midY), 4))
                         .position(x: geo.size.width / 2, y: (thumbY + midY) / 2)
 
@@ -1900,7 +1704,7 @@ private struct KenwoodCabinFaderPad: View {
                     .fill(Color.black.opacity(0.38))
                     .overlay(
                         RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .strokeBorder(KenwoodPalette.glassBorderGradient, lineWidth: 1)
+                            .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
                     )
 
                 // Стилизованный контур салона автомобиля
@@ -1946,10 +1750,9 @@ private struct KenwoodCabinFaderPad: View {
                         .fill(KenwoodPalette.crimson.opacity(0.28))
                         .frame(width: 60, height: 60)
                     Circle()
-                        .fill(KenwoodPalette.accentButtonGradient)
+                        .fill(KenwoodPalette.neonRed)
                         .frame(width: 24, height: 24)
                         .overlay(Circle().strokeBorder(.white, lineWidth: 2))
-                        .shadow(color: KenwoodPalette.neonRed.opacity(0.85), radius: 8)
                 }
                 .position(x: xPos, y: yPos)
             }
@@ -1982,122 +1785,119 @@ private struct KenwoodConnectionSheet: View {
 
     var body: some View {
         NativeNavigationContainer {
-            ZStack {
-                KenwoodLiquidBackdrop(glowColor: glowColor)
+            VStack(spacing: 14) {
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(kenwood.isConnected ? KenwoodPalette.cyan : KenwoodPalette.amber)
+                        .frame(width: 10, height: 10)
+                    Text(kenwood.bluetoothStateText ?? kenwood.statusText)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.88))
+                    Spacer()
+                    if kenwood.isScanning {
+                        ProgressView().tint(KenwoodPalette.neonRed)
+                    }
+                }
+                .padding(14)
+                .kenwoodGlassPanel(cornerRadius: 18)
 
-                VStack(spacing: 14) {
+                NativeGlassContainer(spacing: 10) {
                     HStack(spacing: 10) {
-                        Circle()
-                            .fill(kenwood.isConnected ? KenwoodPalette.cyan : KenwoodPalette.amber)
-                            .frame(width: 10, height: 10)
-                        Text(kenwood.bluetoothStateText ?? kenwood.statusText)
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.white.opacity(0.88))
-                        Spacer()
-                        if kenwood.isScanning {
-                            ProgressView().tint(KenwoodPalette.neonRed)
-                        }
-                    }
-                    .padding(14)
-                    .background(KenwoodGlassPanel(cornerRadius: 18))
-
-                    NativeGlassContainer(spacing: 10) {
-                        HStack(spacing: 10) {
-                            Button {
-                                Haptics.tap()
-                                kenwood.refreshDevices()
-                            } label: {
-                                Label("Искать", systemImage: "arrow.clockwise")
-                                    .font(.subheadline.weight(.bold))
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 4)
-                            }
-                            .nativeGlassButton(prominent: true, tint: KenwoodPalette.crimson)
-                            .controlSize(.large)
-
-                            Button {
-                                Haptics.tap()
-                                kenwood.showSystemBluetoothPicker()
-                            } label: {
-                                Label("Выбрать BT", systemImage: "antenna.radiowaves.left.and.right")
-                                    .font(.subheadline.weight(.semibold))
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 4)
-                            }
-                            .nativeGlassButton(prominent: false)
-                            .controlSize(.large)
-                        }
-                    }
-
-                    if kenwood.isConnected {
-                        Button(role: .destructive) {
+                        Button {
                             Haptics.tap()
-                            kenwood.disconnect()
+                            kenwood.refreshDevices()
                         } label: {
-                            Text("Отключиться от \(kenwood.connectedDeviceName ?? "KENWOOD")")
+                            Label("Искать", systemImage: "arrow.clockwise")
+                                .font(.subheadline.weight(.bold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 4)
+                        }
+                        .nativeGlassButton(prominent: true, tint: KenwoodPalette.crimson)
+                        .controlSize(.large)
+
+                        Button {
+                            Haptics.tap()
+                            kenwood.showSystemBluetoothPicker()
+                        } label: {
+                            Label("Выбрать BT", systemImage: "antenna.radiowaves.left.and.right")
                                 .font(.subheadline.weight(.semibold))
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, 3)
+                                .padding(.vertical, 4)
                         }
-                        .nativeGlassButton(prominent: false, tint: KenwoodPalette.neonRed)
+                        .nativeGlassButton(prominent: false)
+                        .controlSize(.large)
                     }
-
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: 10) {
-                            if kenwood.discoveredDevices.isEmpty {
-                                if let audioName = kenwood.connectedBluetoothAudioName {
-                                    bluetoothAudioOnlyCard(
-                                        deviceName: audioName,
-                                        portType: kenwood.connectedBluetoothAudioPortType ?? "Bluetooth Audio"
-                                    )
-                                } else {
-                                    NativeEmptyStateView(
-                                        title: "Ресивер KENWOOD не обнаружен",
-                                        systemImage: "car.fill",
-                                        description: "Подключите iPhone к магнитоле в «Настройках → Bluetooth» или по кабелю USB, затем нажмите «Искать»."
-                                    ) {
-                                        EmptyView()
-                                    }
-                                    .padding(12)
-                                    .background(KenwoodGlassPanel(cornerRadius: 20))
-                                }
-                            } else {
-                                ForEach(kenwood.discoveredDevices) { device in
-                                    deviceRowButton(device)
-                                }
-                            }
-
-                            if !kenwood.nearbyBLEDevices.isEmpty {
-                                DisclosureGroup(isExpanded: $showAllBLE) {
-                                    VStack(spacing: 8) {
-                                        ForEach(kenwood.nearbyBLEDevices) { device in
-                                            deviceRowButton(device)
-                                        }
-                                    }
-                                    .padding(.top, 8)
-                                } label: {
-                                    HStack {
-                                        Text("Другие BLE-устройства рядом")
-                                            .font(.caption.weight(.semibold))
-                                            .foregroundStyle(.white.opacity(0.72))
-                                        Spacer()
-                                        Text("\(kenwood.nearbyBLEDevices.count)")
-                                            .font(.caption2.weight(.bold))
-                                            .foregroundStyle(KenwoodPalette.iceBlue)
-                                    }
-                                }
-                                .tint(KenwoodPalette.iceBlue)
-                                .padding(14)
-                                .background(KenwoodGlassPanel(cornerRadius: 18))
-                            }
-                        }
-                    }
-
-                    Spacer(minLength: 8)
                 }
-                .padding(.horizontal, 18)
-                .padding(.top, 8)
+
+                if kenwood.isConnected {
+                    Button(role: .destructive) {
+                        Haptics.tap()
+                        kenwood.disconnect()
+                    } label: {
+                        Text("Отключиться от \(kenwood.connectedDeviceName ?? "KENWOOD")")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 3)
+                    }
+                    .nativeGlassButton(prominent: false, tint: KenwoodPalette.neonRed)
+                }
+
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 10) {
+                        if kenwood.discoveredDevices.isEmpty {
+                            if let audioName = kenwood.connectedBluetoothAudioName {
+                                bluetoothAudioOnlyCard(
+                                    deviceName: audioName,
+                                    portType: kenwood.connectedBluetoothAudioPortType ?? "Bluetooth Audio"
+                                )
+                            } else {
+                                NativeEmptyStateView(
+                                    title: "Ресивер KENWOOD не обнаружен",
+                                    systemImage: "car.fill",
+                                    description: "Подключите iPhone к магнитоле в «Настройках → Bluetooth» или по кабелю USB, затем нажмите «Искать»."
+                                ) {
+                                    EmptyView()
+                                }
+                                .padding(12)
+                                .kenwoodGlassPanel(cornerRadius: 20)
+                            }
+                        } else {
+                            ForEach(kenwood.discoveredDevices) { device in
+                                deviceRowButton(device)
+                            }
+                        }
+
+                        if !kenwood.nearbyBLEDevices.isEmpty {
+                            DisclosureGroup(isExpanded: $showAllBLE) {
+                                VStack(spacing: 8) {
+                                    ForEach(kenwood.nearbyBLEDevices) { device in
+                                        deviceRowButton(device)
+                                    }
+                                }
+                                .padding(.top, 8)
+                            } label: {
+                                HStack {
+                                    Text("Другие BLE-устройства рядом")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.white.opacity(0.72))
+                                    Spacer()
+                                    Text("\(kenwood.nearbyBLEDevices.count)")
+                                        .font(.caption2.weight(.bold))
+                                        .foregroundStyle(KenwoodPalette.iceBlue)
+                                }
+                            }
+                            .tint(KenwoodPalette.iceBlue)
+                            .padding(14)
+                            .kenwoodGlassPanel(cornerRadius: 18)
+                        }
+                    }
+                }
+
+                Spacer(minLength: 8)
             }
+            .padding(.horizontal, 18)
+            .padding(.top, 8)
+            .nativeGlassSheetContainerBackground()
             .navigationTitle("Подключение KENWOOD")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -2124,7 +1924,7 @@ private struct KenwoodConnectionSheet: View {
                     .font(.title3)
                     .foregroundStyle(KenwoodPalette.neonRed)
                     .frame(width: 42, height: 42)
-                    .background(KenwoodGlassCircle())
+                    .kenwoodGlassCircle()
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(device.name)
@@ -2141,7 +1941,7 @@ private struct KenwoodConnectionSheet: View {
                     .foregroundStyle(.white.opacity(0.45))
             }
             .padding(14)
-            .background(KenwoodGlassPanel(cornerRadius: 18))
+            .kenwoodGlassPanel(cornerRadius: 18, interactive: true)
         }
         .buttonStyle(RemotePressStyle())
     }
@@ -2153,7 +1953,7 @@ private struct KenwoodConnectionSheet: View {
                     .font(.title3)
                     .foregroundStyle(KenwoodPalette.cyan)
                     .frame(width: 42, height: 42)
-                    .background(KenwoodGlassCircle())
+                    .kenwoodGlassCircle()
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(deviceName)
@@ -2184,6 +1984,6 @@ private struct KenwoodConnectionSheet: View {
             }
         }
         .padding(16)
-        .background(KenwoodGlassPanel(cornerRadius: 20))
+        .kenwoodGlassPanel(cornerRadius: 20)
     }
 }

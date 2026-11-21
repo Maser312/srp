@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Хаб управления телевизорами (Сбер Салют / Android TV & Google TV / YaOS)
+// MARK: - Хаб управления телевизорами (Сбер Салют / Android TV & Google TV / YaOS) — нативный Liquid Glass
 
 struct TVHubConnectionView: View {
     @ObservedObject var remote: UniversalTVRemoteManager
@@ -12,186 +12,179 @@ struct TVHubConnectionView: View {
 
     var body: some View {
         ZStack {
-            Color(red: 0.03, green: 0.03, blue: 0.04)
-                .ignoresSafeArea()
+            if !isPresentedAsSheet {
+                NativeDarkBackdrop()
+            }
 
             VStack(spacing: 0) {
-                // Верхняя панель
-                HStack(spacing: 10) {
-                    Button {
-                        Haptics.tap()
-                        onClose()
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: isPresentedAsSheet ? "xmark" : "chevron.left")
-                                .font(.system(size: 13, weight: .bold))
-                            Text(isPresentedAsSheet ? "Закрыть" : "Меню")
-                                .font(.subheadline.weight(.semibold))
-                        }
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 13)
-                        .frame(height: 38)
-                        .background(
-                            Capsule().fill(Color(white: 0.14))
-                        )
-                    }
-                    .buttonStyle(RemotePressStyle())
-
-                    Spacer()
-
-                    Text("Телевизоры")
-                        .font(.headline.weight(.bold))
-                        .foregroundStyle(.white)
-
-                    Spacer()
-
-                    Button {
-                        Haptics.tap()
-                        remote.refreshDiscovery()
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 14, weight: .semibold))
+                // Верхняя нативная стеклянная панель
+                NativeGlassContainer(spacing: 10) {
+                    HStack(spacing: 10) {
+                        Button {
+                            Haptics.tap()
+                            onClose()
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: isPresentedAsSheet ? "xmark" : "chevron.left")
+                                    .font(.system(size: 13, weight: .bold))
+                                Text(isPresentedAsSheet ? "Закрыть" : "Меню")
+                                    .font(.subheadline.weight(.semibold))
+                            }
                             .foregroundStyle(.white)
-                            .frame(width: 38, height: 38)
-                            .background(Circle().fill(Color(white: 0.14)))
-                    }
-                    .buttonStyle(RemotePressStyle())
-                    .accessibilityLabel("Обновить поиск ТВ")
+                            .padding(.horizontal, 14)
+                            .frame(height: 40)
+                            .nativeLiquidGlass(in: Capsule(), interactive: true)
+                        }
+                        .buttonStyle(RemotePressStyle())
 
-                    Button {
-                        Haptics.tap()
-                        showAddSheet = true
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(.black)
-                            .frame(width: 38, height: 38)
-                            .background(Circle().fill(Color.white))
+                        Spacer()
+
+                        Text("Телевизоры")
+                            .font(.headline.weight(.bold))
+                            .foregroundStyle(.white)
+
+                        Spacer()
+
+                        Button {
+                            Haptics.tap()
+                            remote.refreshDiscovery()
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 40, height: 40)
+                                .nativeLiquidGlass(in: Circle(), interactive: true)
+                        }
+                        .buttonStyle(RemotePressStyle())
+                        .accessibilityLabel("Обновить поиск ТВ")
+
+                        Button {
+                            Haptics.tap()
+                            showAddSheet = true
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(.black)
+                                .frame(width: 40, height: 40)
+                                .nativeLiquidGlass(in: Circle(), tint: Color.white.opacity(0.90), interactive: true)
+                        }
+                        .buttonStyle(RemotePressStyle())
+                        .accessibilityLabel("Добавить телевизор вручную")
                     }
-                    .buttonStyle(RemotePressStyle())
-                    .accessibilityLabel("Добавить телевизор вручную")
                 }
                 .padding(.horizontal, 18)
-                .padding(.top, 12)
+                .padding(.top, isPresentedAsSheet ? 20 : 12)
                 .padding(.bottom, 12)
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 18) {
-                        // Карточка статуса поиска
-                        HStack(spacing: 12) {
-                            Circle()
-                                .fill(remote.errorText == nil ? SberPalette.brightGreen : SberPalette.coral)
-                                .frame(width: 9, height: 9)
+                    NativeGlassContainer(spacing: 16) {
+                        VStack(spacing: 18) {
+                            // Карточка статуса поиска
+                            HStack(spacing: 12) {
+                                Circle()
+                                    .fill(remote.errorText == nil ? SberPalette.brightGreen : SberPalette.coral)
+                                    .frame(width: 9, height: 9)
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(remote.errorText ?? "Поиск ТВ в сети Wi-Fi")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(.white)
-                                Text("Сбер Салют · Android TV / Google TV · YaOS")
-                                    .font(.caption)
-                                    .foregroundStyle(.white.opacity(0.54))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(remote.errorText ?? "Поиск ТВ в сети Wi-Fi")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(.white)
+                                    Text("Сбер Салют · Android TV / Google TV · YaOS")
+                                        .font(.caption)
+                                        .foregroundStyle(.white.opacity(0.56))
+                                }
+
+                                Spacer()
+
+                                if remote.isScanning || remote.discoveredTVs.isEmpty {
+                                    ProgressView()
+                                        .tint(.white.opacity(0.78))
+                                }
+                            }
+                            .padding(14)
+                            .nativeLiquidGlass(
+                                in: RoundedRectangle(cornerRadius: 22, style: .continuous),
+                                tint: remote.errorText != nil ? SberPalette.coral.opacity(0.25) : nil
+                            )
+
+                            // Раздел 1: Сохранённые телевизоры (мульти-пульт)
+                            if !remote.savedTVs.isEmpty {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    HStack {
+                                        Text("Мои телевизоры")
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(.white.opacity(0.62))
+                                        Spacer()
+                                        Text("\(remote.savedTVs.count)")
+                                            .font(.caption.weight(.bold))
+                                            .foregroundStyle(.white.opacity(0.45))
+                                    }
+                                    .padding(.horizontal, 4)
+
+                                    ForEach(remote.savedTVs) { profile in
+                                        savedTVRow(profile)
+                                    }
+                                }
                             }
 
-                            Spacer()
-
-                            if remote.isScanning || remote.discoveredTVs.isEmpty {
-                                ProgressView()
-                                    .tint(.white.opacity(0.75))
-                            }
-                        }
-                        .padding(14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .fill(Color(white: 0.11))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                        .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
-                                )
-                        )
-
-                        // Раздел 1: Сохранённые телевизоры (мульти-пульт)
-                        if !remote.savedTVs.isEmpty {
+                            // Раздел 2: Автопоиск по Wi-Fi
                             VStack(alignment: .leading, spacing: 10) {
                                 HStack {
-                                    Text("Мои телевизоры")
+                                    Text("Найденные в сети Wi-Fi")
                                         .font(.subheadline.weight(.semibold))
                                         .foregroundStyle(.white.opacity(0.62))
                                     Spacer()
-                                    Text("\(remote.savedTVs.count)")
-                                        .font(.caption.weight(.bold))
-                                        .foregroundStyle(.white.opacity(0.45))
                                 }
                                 .padding(.horizontal, 4)
 
-                                ForEach(remote.savedTVs) { profile in
-                                    savedTVRow(profile)
+                                if remote.discoveredTVs.isEmpty {
+                                    VStack(spacing: 10) {
+                                        Image(systemName: "tv.and.mediabox")
+                                            .font(.system(size: 30, weight: .regular))
+                                            .foregroundStyle(.white.opacity(0.38))
+                                        Text("Телевизоры пока не найдены")
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(.white.opacity(0.82))
+                                        Text("Убедитесь, что iPhone и ТВ в одной сети Wi-Fi, или нажмите «+» справа сверху, чтобы добавить Android TV / Google TV / YaOS по IP-адресу.")
+                                            .font(.caption)
+                                            .foregroundStyle(.white.opacity(0.50))
+                                            .multilineTextAlignment(.center)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 24)
+                                    .padding(.horizontal, 16)
+                                    .nativeLiquidGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                                } else {
+                                    ForEach(remote.discoveredTVs) { device in
+                                        discoveredTVRow(device)
+                                    }
                                 }
                             }
-                        }
 
-                        // Раздел 2: Автопоиск по Wi-Fi
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack {
-                                Text("Найденные в сети Wi-Fi")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(.white.opacity(0.62))
-                                Spacer()
-                            }
-                            .padding(.horizontal, 4)
-
-                            if remote.discoveredTVs.isEmpty {
-                                VStack(spacing: 10) {
-                                    Image(systemName: "tv.and.mediabox")
-                                        .font(.system(size: 30, weight: .regular))
-                                        .foregroundStyle(.white.opacity(0.35))
-                                    Text("Телевизоры пока не найдены")
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundStyle(.white.opacity(0.78))
-                                    Text("Убедитесь, что iPhone и ТВ в одной сети Wi-Fi, или нажмите «+» справа сверху, чтобы добавить Android TV / Google TV / YaOS по IP-адресу.")
-                                        .font(.caption)
-                                        .foregroundStyle(.white.opacity(0.48))
-                                        .multilineTextAlignment(.center)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 24)
-                                .padding(.horizontal, 16)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                        .fill(Color(white: 0.10))
+                            // Подсказка по подключению платформ
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Поддержка платформ")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(.white.opacity(0.72))
+                                platformHintRow(
+                                    badge: "Салют ТВ",
+                                    color: TVPlatform.sberSalute.accentColor,
+                                    text: "Автопоиск по Wi-Fi (SberBox, SberPortal, Салют ТВ) + 4-значный PIN."
                                 )
-                            } else {
-                                ForEach(remote.discoveredTVs) { device in
-                                    discoveredTVRow(device)
-                                }
+                                platformHintRow(
+                                    badge: "Android TV",
+                                    color: TVPlatform.androidTV.accentColor,
+                                    text: "Протокол Remote v2 (порт 6466/6467) с 6-значным HEX-кодом на экране."
+                                )
+                                platformHintRow(
+                                    badge: "YaOS",
+                                    color: TVPlatform.yaOS.accentColor,
+                                    text: "Яндекс ТВ / ТВ Станция: Remote v2 или ADB по Wi-Fi (порт 5555)."
+                                )
                             }
+                            .padding(14)
+                            .nativeLiquidGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                         }
-
-                        // Подсказка по подключению платформ
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Поддержка платформ")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(.white.opacity(0.70))
-                            platformHintRow(
-                                badge: "Салют ТВ",
-                                color: TVPlatform.sberSalute.accentColor,
-                                text: "Автопоиск по Wi-Fi (SberBox, SberPortal, Салют ТВ) + 4-значный PIN."
-                            )
-                            platformHintRow(
-                                badge: "Android TV",
-                                color: TVPlatform.androidTV.accentColor,
-                                text: "Протокол Remote v2 (порт 6466/6467) с 6-значным HEX-кодом на экране."
-                            )
-                            platformHintRow(
-                                badge: "YaOS",
-                                color: TVPlatform.yaOS.accentColor,
-                                text: "Яндекс ТВ / ТВ Станция: Remote v2 или ADB по Wi-Fi (порт 5555)."
-                            )
-                        }
-                        .padding(14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .fill(Color(white: 0.09))
-                        )
                     }
                     .padding(.horizontal, 18)
                     .padding(.bottom, 28)
@@ -199,6 +192,7 @@ struct TVHubConnectionView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .modifier(TVHubSheetModifier(isPresentedAsSheet: isPresentedAsSheet))
         .sheet(isPresented: $showAddSheet) {
             TVProfileEditorSheet(existingProfile: nil) { saved in
                 remote.upsertProfile(saved, makeActive: false)
@@ -230,14 +224,14 @@ struct TVHubConnectionView: View {
                 }
             } label: {
                 HStack(spacing: 13) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(profile.platform.accentColor.opacity(0.20))
-                        Image(systemName: profile.platform.symbol)
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(profile.platform.accentColor)
-                    }
-                    .frame(width: 44, height: 44)
+                    Image(systemName: profile.platform.symbol)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(profile.platform.accentColor)
+                        .frame(width: 44, height: 44)
+                        .nativeLiquidGlass(
+                            in: RoundedRectangle(cornerRadius: 14, style: .continuous),
+                            tint: profile.platform.accentColor.opacity(0.22)
+                        )
 
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
@@ -256,7 +250,7 @@ struct TVHubConnectionView: View {
                         }
                         Text(profile.subtitle)
                             .font(.caption)
-                            .foregroundStyle(.white.opacity(0.55))
+                            .foregroundStyle(.white.opacity(0.56))
                             .lineLimit(1)
                     }
 
@@ -288,22 +282,16 @@ struct TVHubConnectionView: View {
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.58))
-                    .frame(width: 34, height: 34)
-                    .background(Circle().fill(Color.white.opacity(0.08)))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .frame(width: 36, height: 36)
+                    .nativeLiquidGlass(in: Circle(), interactive: true)
             }
         }
         .padding(13)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(isActive ? Color(white: 0.16) : Color(white: 0.11))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .strokeBorder(
-                            isActive ? profile.platform.accentColor.opacity(0.55) : Color.white.opacity(0.06),
-                            lineWidth: 1
-                        )
-                )
+        .nativeLiquidGlass(
+            in: RoundedRectangle(cornerRadius: 22, style: .continuous),
+            tint: isActive ? profile.platform.accentColor.opacity(0.22) : nil,
+            interactive: true
         )
     }
 
@@ -316,14 +304,14 @@ struct TVHubConnectionView: View {
             }
         } label: {
             HStack(spacing: 13) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(device.platform.accentColor.opacity(0.18))
-                    Image(systemName: device.platform.symbol)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(device.platform.accentColor)
-                }
-                .frame(width: 44, height: 44)
+                Image(systemName: device.platform.symbol)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(device.platform.accentColor)
+                    .frame(width: 44, height: 44)
+                    .nativeLiquidGlass(
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous),
+                        tint: device.platform.accentColor.opacity(0.20)
+                    )
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(device.name)
@@ -340,16 +328,12 @@ struct TVHubConnectionView: View {
 
                 Image(systemName: "chevron.right")
                     .font(.footnote.weight(.bold))
-                    .foregroundStyle(.white.opacity(0.40))
+                    .foregroundStyle(.white.opacity(0.42))
             }
             .padding(13)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color(white: 0.11))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
-                    )
+            .nativeLiquidGlass(
+                in: RoundedRectangle(cornerRadius: 22, style: .continuous),
+                interactive: true
             )
         }
         .buttonStyle(RemotePressStyle())
@@ -366,8 +350,22 @@ struct TVHubConnectionView: View {
                 .frame(width: 78, alignment: .leading)
             Text(text)
                 .font(.caption2)
-                .foregroundStyle(.white.opacity(0.56))
+                .foregroundStyle(.white.opacity(0.58))
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+private struct TVHubSheetModifier: ViewModifier {
+    let isPresentedAsSheet: Bool
+
+    func body(content: Content) -> some View {
+        if isPresentedAsSheet {
+            content
+                .nativeGlassSheetContainerBackground()
+                .nativePresentationSheet()
+        } else {
+            content
         }
     }
 }

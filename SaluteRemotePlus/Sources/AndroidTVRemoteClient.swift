@@ -495,7 +495,7 @@ final class AndroidTVRemoteClient: ObservableObject {
     private func sendPairingRequest() {
         var req = Data()
         req.append(ATVProto.stringField(1, "com.andrey.saluteremoteplus"))
-        req.append(ATVProto.stringField(2, "Salute Remote+"))
+        req.append(ATVProto.stringField(2, "RemoteA"))
 
         var msg = Data()
         msg.append(ATVProto.varintField(1, 2))   // protocol_version = 2

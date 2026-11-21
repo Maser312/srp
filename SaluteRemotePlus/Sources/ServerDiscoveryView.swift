@@ -26,25 +26,22 @@ struct ServerDiscoverySheet: View {
 
     var body: some View {
         NativeNavigationContainer {
-            ZStack {
-                ServerLiquidBackdrop()
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 14) {
+                    scannerConfigCard
 
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 14) {
-                        scannerConfigCard
-
-                        if manager.isScanningNetwork || !manager.scanStatusText.isEmpty {
-                            scanProgressCard
-                        }
-
-                        resultsSection
-
-                        Spacer(minLength: 24)
+                    if manager.isScanningNetwork || !manager.scanStatusText.isEmpty {
+                        scanProgressCard
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
+
+                    resultsSection
+
+                    Spacer(minLength: 24)
                 }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
             }
+            .nativeGlassSheetContainerBackground()
             .navigationTitle("Поиск iDRAC / BMC")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -94,42 +91,34 @@ struct ServerDiscoverySheet: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 11)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.black.opacity(0.34))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
-                        )
+                .nativeLiquidGlass(
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous),
+                    interactive: true
                 )
 
             if !manager.suggestedSubnets.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(manager.suggestedSubnets, id: \.self) { cidr in
-                            let selected = (subnetInput == cidr)
-                            Button {
-                                Haptics.light()
-                                subnetInput = cidr
-                            } label: {
-                                Text(cidr)
-                                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                    .foregroundStyle(selected ? Color.white : Color.white.opacity(0.74))
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(
-                                        Capsule()
-                                            .fill(selected ? ServerPalette.dellBlue.opacity(0.55) : Color.white.opacity(0.08))
-                                            .overlay(
-                                                Capsule()
-                                                    .strokeBorder(
-                                                        selected ? ServerPalette.iruCyan : Color.white.opacity(0.14),
-                                                        lineWidth: 1
-                                                    )
-                                            )
-                                    )
+                    NativeGlassContainer(spacing: 8) {
+                        HStack(spacing: 8) {
+                            ForEach(manager.suggestedSubnets, id: \.self) { cidr in
+                                let selected = (subnetInput == cidr)
+                                Button {
+                                    Haptics.light()
+                                    subnetInput = cidr
+                                } label: {
+                                    Text(cidr)
+                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                        .foregroundStyle(selected ? Color.white : Color.white.opacity(0.76))
+                                        .padding(.horizontal, 11)
+                                        .padding(.vertical, 7)
+                                        .nativeLiquidGlass(
+                                            in: Capsule(),
+                                            tint: selected ? ServerPalette.dellBlue.opacity(0.65) : nil,
+                                            interactive: true
+                                        )
+                                }
+                                .buttonStyle(RemotePressStyle())
                             }
-                            .buttonStyle(RemotePressStyle())
                         }
                     }
                 }
@@ -170,7 +159,7 @@ struct ServerDiscoverySheet: View {
             .controlSize(.large)
         }
         .padding(14)
-        .background(ServerGlassPanel(cornerRadius: 20, accentGlow: ServerPalette.iruCyan))
+        .nativeLiquidGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     // MARK: - Прогресс сканирования
@@ -197,7 +186,7 @@ struct ServerDiscoverySheet: View {
                 .tint(ServerPalette.iruCyan)
         }
         .padding(13)
-        .background(ServerGlassPanel(cornerRadius: 16))
+        .nativeLiquidGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     // MARK: - Найденные контроллеры
@@ -224,14 +213,14 @@ struct ServerDiscoverySheet: View {
                         EmptyView()
                     }
                     .padding(12)
-                    .background(ServerGlassPanel(cornerRadius: 18))
+                    .nativeLiquidGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                 } else if !manager.isScanningNetwork && otherHostsCount > 0 && !showAllWebHosts {
                     Text("Подтверждённые iDRAC/BMC не обнаружены, но найдено \(otherHostsCount) веб-хостов — включите переключатель выше, чтобы увидеть их.")
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.68))
                         .padding(14)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(ServerGlassPanel(cornerRadius: 16))
+                        .nativeLiquidGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
             } else {
                 ForEach(visibleResults) { item in
@@ -245,20 +234,14 @@ struct ServerDiscoverySheet: View {
         let alreadySaved = manager.isAlreadySaved(ip: item.ip)
 
         return HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [item.vendor.accentColor, item.vendor.secondaryAccentColor],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                Image(systemName: item.vendor.symbol)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.white)
-            }
-            .frame(width: 42, height: 42)
+            Image(systemName: item.vendor.symbol)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 42, height: 42)
+                .nativeLiquidGlass(
+                    in: RoundedRectangle(cornerRadius: 12, style: .continuous),
+                    tint: item.vendor.accentColor.opacity(0.62)
+                )
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
@@ -335,6 +318,9 @@ struct ServerDiscoverySheet: View {
             }
         }
         .padding(13)
-        .background(ServerGlassPanel(cornerRadius: 18, accentGlow: item.isConfirmedBMC ? item.vendor.accentColor : nil))
+        .nativeLiquidGlass(
+            in: RoundedRectangle(cornerRadius: 20, style: .continuous),
+            tint: item.isConfirmedBMC ? item.vendor.accentColor.opacity(0.14) : nil
+        )
     }
 }

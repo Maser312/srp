@@ -58,14 +58,6 @@ enum TVPlatform: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var badgeGradient: LinearGradient {
-        LinearGradient(
-            colors: [accentColor, secondaryAccentColor],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-
     var defaultConnectionMethod: TVConnectionMethod {
         switch self {
         case .sberSalute: return .sberCast

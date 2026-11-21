@@ -330,7 +330,7 @@ final class SberCastRemote: NSObject, ObservableObject, LibSberCast.SberCastList
 
     private func scheduleDiscoveryRestart() {
         guard discoveryRestarts < 5 else {
-            error = "Нет доступа к локальной сети. Проверьте Настройки → Конфиденциальность → Локальная сеть → Salute Remote+"
+            error = "Нет доступа к локальной сети. Проверьте Настройки → Конфиденциальность → Локальная сеть → RemoteA"
             return
         }
         discoveryRestarts += 1

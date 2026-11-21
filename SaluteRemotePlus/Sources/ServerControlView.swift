@@ -281,20 +281,14 @@ struct ServerControlView: View {
     private var bmcIdentityCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 13, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [liveServer.vendor.accentColor, liveServer.vendor.secondaryAccentColor],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                    Image(systemName: liveServer.vendor.symbol)
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(.white)
-                }
-                .frame(width: 42, height: 42)
+                Image(systemName: liveServer.vendor.symbol)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 42, height: 42)
+                    .nativeLiquidGlass(
+                        in: RoundedRectangle(cornerRadius: 13, style: .continuous),
+                        tint: liveServer.vendor.accentColor.opacity(0.62)
+                    )
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(caps.fullDescriptor)
@@ -366,7 +360,7 @@ struct ServerControlView: View {
             }
         }
         .padding(14)
-        .background(ServerGlassPanel(cornerRadius: 20, accentGlow: liveServer.vendor.accentColor))
+        .nativeLiquidGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     // MARK: - Вкладка 1: Динамический пульт управления
@@ -436,7 +430,7 @@ struct ServerControlView: View {
             }
         }
         .padding(14)
-        .background(ServerGlassPanel(cornerRadius: 20))
+        .nativeLiquidGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     private var oneTimeBootSection: some View {
@@ -453,35 +447,31 @@ struct ServerControlView: View {
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(caps.allowedBootTargets) { target in
-                        let isSelected = (selectedBootTarget == target)
-                        Button {
-                            Haptics.light()
-                            selectedBootTarget = target
-                        } label: {
-                            HStack(spacing: 5) {
-                                Image(systemName: target.symbol)
-                                    .font(.system(size: 11, weight: .bold))
-                                Text(target.title)
-                                    .font(.caption2.weight(.bold))
+                NativeGlassContainer(spacing: 8) {
+                    HStack(spacing: 8) {
+                        ForEach(caps.allowedBootTargets) { target in
+                            let isSelected = (selectedBootTarget == target)
+                            Button {
+                                Haptics.light()
+                                selectedBootTarget = target
+                            } label: {
+                                HStack(spacing: 5) {
+                                    Image(systemName: target.symbol)
+                                        .font(.system(size: 11, weight: .bold))
+                                    Text(target.title)
+                                        .font(.caption2.weight(.bold))
+                                }
+                                .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.76))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .nativeLiquidGlass(
+                                    in: Capsule(),
+                                    tint: isSelected ? liveServer.vendor.accentColor.opacity(0.65) : nil,
+                                    interactive: true
+                                )
                             }
-                            .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.72))
-                            .padding(.horizontal, 11)
-                            .padding(.vertical, 8)
-                            .background(
-                                Capsule()
-                                    .fill(isSelected ? liveServer.vendor.accentColor.opacity(0.55) : Color.white.opacity(0.08))
-                                    .overlay(
-                                        Capsule()
-                                            .strokeBorder(
-                                                isSelected ? ServerPalette.iruCyan : Color.white.opacity(0.14),
-                                                lineWidth: 1
-                                            )
-                                    )
-                            )
+                            .buttonStyle(RemotePressStyle())
                         }
-                        .buttonStyle(RemotePressStyle())
                     }
                 }
             }
@@ -515,7 +505,7 @@ struct ServerControlView: View {
             }
         }
         .padding(14)
-        .background(ServerGlassPanel(cornerRadius: 20))
+        .nativeLiquidGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     private var serviceActionsSection: some View {
@@ -573,7 +563,7 @@ struct ServerControlView: View {
             }
         }
         .padding(14)
-        .background(ServerGlassPanel(cornerRadius: 20))
+        .nativeLiquidGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     private var legacyBMCFallbackCard: some View {
@@ -620,7 +610,10 @@ struct ServerControlView: View {
             .controlSize(.large)
         }
         .padding(18)
-        .background(ServerGlassPanel(cornerRadius: 22, accentGlow: ServerPalette.warnAmber))
+        .nativeLiquidGlass(
+            in: RoundedRectangle(cornerRadius: 24, style: .continuous),
+            tint: ServerPalette.warnAmber.opacity(0.14)
+        )
     }
 
     // MARK: - Вкладка 2: Датчики (адаптивно по доступным метрикам)
@@ -636,7 +629,7 @@ struct ServerControlView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(14)
-                .background(ServerGlassPanel(cornerRadius: 16))
+                .nativeLiquidGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
 
             if telemetry.powerConsumedWatts != nil || !telemetry.powerSupplies.isEmpty {
@@ -712,7 +705,7 @@ struct ServerControlView: View {
             }
         }
         .padding(14)
-        .background(ServerGlassPanel(cornerRadius: 20))
+        .nativeLiquidGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     private var temperatureSensorsCard: some View {
@@ -750,7 +743,7 @@ struct ServerControlView: View {
             }
         }
         .padding(14)
-        .background(ServerGlassPanel(cornerRadius: 20))
+        .nativeLiquidGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     private var fanSensorsCard: some View {
@@ -788,7 +781,7 @@ struct ServerControlView: View {
             }
         }
         .padding(14)
-        .background(ServerGlassPanel(cornerRadius: 20))
+        .nativeLiquidGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     private var drivesSensorsCard: some View {
@@ -827,7 +820,7 @@ struct ServerControlView: View {
             }
         }
         .padding(14)
-        .background(ServerGlassPanel(cornerRadius: 20))
+        .nativeLiquidGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     private var voltageSensorsCard: some View {
@@ -857,7 +850,7 @@ struct ServerControlView: View {
             }
         }
         .padding(14)
-        .background(ServerGlassPanel(cornerRadius: 20))
+        .nativeLiquidGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     // MARK: - Вкладка 3: Журналы (SEL / Lifecycle Log / FaultList / EventLog)
@@ -865,32 +858,28 @@ struct ServerControlView: View {
     private var logsTabContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(caps.logServices) { svc in
-                        let isSelected = (activeLogService?.id == svc.id)
-                        Button {
-                            Haptics.light()
-                            selectedLogServiceId = svc.id
-                            Task { await manager.loadLogs(for: liveServer, service: svc) }
-                        } label: {
-                            Text(svc.name)
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.68))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(
-                                    Capsule()
-                                        .fill(isSelected ? liveServer.vendor.accentColor.opacity(0.55) : Color.white.opacity(0.08))
-                                        .overlay(
-                                            Capsule()
-                                                .strokeBorder(
-                                                    isSelected ? ServerPalette.iruCyan : Color.white.opacity(0.14),
-                                                    lineWidth: 1
-                                                )
-                                        )
-                                )
+                NativeGlassContainer(spacing: 8) {
+                    HStack(spacing: 8) {
+                        ForEach(caps.logServices) { svc in
+                            let isSelected = (activeLogService?.id == svc.id)
+                            Button {
+                                Haptics.light()
+                                selectedLogServiceId = svc.id
+                                Task { await manager.loadLogs(for: liveServer, service: svc) }
+                            } label: {
+                                Text(svc.name)
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.74))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .nativeLiquidGlass(
+                                        in: Capsule(),
+                                        tint: isSelected ? liveServer.vendor.accentColor.opacity(0.65) : nil,
+                                        interactive: true
+                                    )
+                            }
+                            .buttonStyle(RemotePressStyle())
                         }
-                        .buttonStyle(RemotePressStyle())
                     }
                 }
             }
@@ -938,7 +927,7 @@ struct ServerControlView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(18)
-                    .background(ServerGlassPanel(cornerRadius: 18))
+                    .nativeLiquidGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                 } else if entries.isEmpty {
                     NativeEmptyStateView(
                         title: "Журнал пуст",
@@ -948,7 +937,7 @@ struct ServerControlView: View {
                         EmptyView()
                     }
                     .padding(14)
-                    .background(ServerGlassPanel(cornerRadius: 18))
+                    .nativeLiquidGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                 } else {
                     VStack(spacing: 8) {
                         ForEach(entries) { entry in
@@ -1051,13 +1040,9 @@ struct ServerControlView: View {
                     .foregroundStyle(.white.opacity(0.35))
             }
             .padding(11)
-            .background(
-                RoundedRectangle(cornerRadius: 15, style: .continuous)
-                    .fill(Color.white.opacity(0.06))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 15, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-                    )
+            .nativeLiquidGlass(
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous),
+                interactive: true
             )
         }
         .buttonStyle(RemotePressStyle())
