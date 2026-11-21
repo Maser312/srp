@@ -1859,6 +1859,7 @@ struct TextInputSheet: View {
 
 enum Haptics {
     static func tap() { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+    static func light() { tap() }
     static func medium() { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
     static func heavy() { UIImpactFeedbackGenerator(style: .heavy).impactOccurred() }
 }
