@@ -23,14 +23,14 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate --spec project.yml
 
-      # Use the workflow's monotonically increasing run number as the iOS build number.
-      # Every push gets a higher CFBundleVersion without changing the marketing version.
-      - name: Set app build number
-        env:
-          BUILD_NUMBER: ${{ github.run_number }}
+      # CFBundleVersion is incremented in Info.plist with every source push.
+      # Do not replace it with github.run_number: run numbers may be lower than the
+      # app's existing build number after repository/workflow history changes.
+      - name: Verify app build number
         run: |
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" SaluteRemotePlus/Resources/Info.plist
-          echo "App version: $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' SaluteRemotePlus/Resources/Info.plist) ($BUILD_NUMBER)"
+          BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' SaluteRemotePlus/Resources/Info.plist)"
+          echo "App build number: $BUILD_NUMBER"
+          test "$BUILD_NUMBER" -gt 0
 
       - name: Resolve Swift packages
         run: xcodebuild -resolvePackageDependencies -project SaluteRemotePlus.xcodeproj -scheme SaluteRemotePlus
