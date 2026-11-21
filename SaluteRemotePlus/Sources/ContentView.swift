@@ -4,8 +4,8 @@ import UIKit
 enum CenterPadMode: String, CaseIterable, Identifiable {
     case dpad
     case gestures
-    case trackpad
     case airMouse
+    case trackpad
 
     var id: String { rawValue }
 
@@ -13,17 +13,18 @@ enum CenterPadMode: String, CaseIterable, Identifiable {
         switch self {
         case .dpad: return "Кнопки"
         case .gestures: return "Жесты"
+        case .airMouse: return "Аэромышь"
         case .trackpad: return "Курсор"
-        case .airMouse: return "Аэро"
         }
     }
 
+    /// Иконки в круглой кнопке переключения режима справа сверху (как на референсах)
     var symbol: String {
         switch self {
-        case .dpad: return "circle.grid.cross.fill"
-        case .gestures: return "hand.draw.fill"
-        case .trackpad: return "cursorarrow.motionlines"
+        case .dpad: return "appletvremote.gen2"
+        case .gestures: return "arrow.up.and.down.and.arrow.left.and.right"
         case .airMouse: return "gyroscope"
+        case .trackpad: return "scribble.variable"
         }
     }
 
@@ -53,7 +54,7 @@ enum TextSheetMode: String, CaseIterable, Identifiable {
 
 enum AppSection {
     case home
-    case sberRemote
+    case tvRemote
     case kenwood
     case servers
 }
@@ -65,7 +66,7 @@ private enum SuperAppCardTheme {
 }
 
 struct ContentView: View {
-    @StateObject private var remote = SberCastRemote()
+    @StateObject private var remote = UniversalTVRemoteManager()
     @StateObject private var kenwood = KenwoodRemoteManager()
     @StateObject private var serverManager = ServerManager()
     @Environment(\.scenePhase) private var scenePhase
@@ -73,7 +74,12 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            SberLiquidBackdrop()
+            if section == .tvRemote && remote.isShowingRemotePad {
+                Color(red: 0.02, green: 0.02, blue: 0.025)
+                    .ignoresSafeArea()
+            } else {
+                SberLiquidBackdrop()
+            }
 
             switch section {
             case .home:
@@ -81,11 +87,11 @@ struct ContentView: View {
                     remote: remote,
                     kenwood: kenwood,
                     serverManager: serverManager,
-                    onOpenSber: {
+                    onOpenTVRemote: {
                         Haptics.medium()
                         remote.resume()
                         withAnimation(.easeInOut(duration: 0.22)) {
-                            section = .sberRemote
+                            section = .tvRemote
                         }
                     },
                     onOpenKenwood: {
@@ -105,9 +111,9 @@ struct ContentView: View {
                 )
                 .transition(.opacity)
 
-            case .sberRemote:
+            case .tvRemote:
                 Group {
-                    if remote.connectedDevice != nil {
+                    if remote.isShowingRemotePad {
                         RemotePadView(remote: remote) {
                             remote.pause()
                             withAnimation(.easeInOut(duration: 0.22)) {
@@ -115,7 +121,7 @@ struct ContentView: View {
                             }
                         }
                     } else {
-                        ConnectionView(remote: remote) {
+                        TVHubConnectionView(remote: remote, isPresentedAsSheet: false) {
                             remote.pause()
                             withAnimation(.easeInOut(duration: 0.22)) {
                                 section = .home
@@ -154,13 +160,13 @@ struct ContentView: View {
         .onChange(of: scenePhase) { phase in
             switch phase {
             case .active:
-                if section == .sberRemote {
+                if section == .tvRemote {
                     remote.resume()
                 } else if section == .servers {
                     serverManager.refreshNetworkRoute()
                 }
             case .background:
-                if section == .sberRemote {
+                if section == .tvRemote {
                     remote.pause()
                 }
                 serverManager.stopNetworkScan()
@@ -172,28 +178,38 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Главное первое меню супераппа (Пульт Сбер / Магнитола Kenwood / Серверы Dell и iRU)
+// MARK: - Главное первое меню супераппа (Пульт ТВ / Магнитола Kenwood / Серверы Dell и iRU)
 
 struct SuperAppHomeView: View {
-    @ObservedObject var remote: SberCastRemote
+    @ObservedObject var remote: UniversalTVRemoteManager
     @ObservedObject var kenwood: KenwoodRemoteManager
     @ObservedObject var serverManager: ServerManager
-    let onOpenSber: () -> Void
+    let onOpenTVRemote: () -> Void
     let onOpenKenwood: () -> Void
     let onOpenServers: () -> Void
 
-    private var sberSubtitle: String {
-        if let dev = remote.connectedDevice {
-            return remote.wireReady ? "\(dev.name) · Пульт готов" : "\(dev.name) · Подключение…"
+    private var tvSubtitle: String {
+        if remote.isShowingRemotePad {
+            let state = remote.isChannelReady ? "Пульт готов" : remote.statusText
+            return "\(remote.activeDeviceName) · \(remote.activePlatform.shortBadge) · \(state)"
         }
-        if !remote.devices.isEmpty {
-            return "Найдено ТВ: \(remote.devices.count)"
+        if !remote.savedTVs.isEmpty {
+            return "Телевизоров: \(remote.savedTVs.count) · Сбер Салют · Android TV · YaOS"
         }
-        return "Управление Салют ТВ · Курсор · Аэромышь"
+        if !remote.discoveredTVs.isEmpty {
+            return "Найдено ТВ: \(remote.discoveredTVs.count)"
+        }
+        return "Сбер Салют · Android TV / Google TV · YaOS"
     }
 
-    private var sberReady: Bool {
-        remote.connectedDevice != nil && remote.wireReady
+    private var tvBadgeText: String? {
+        if remote.isShowingRemotePad && remote.isChannelReady {
+            return remote.activePlatform.shortBadge
+        }
+        if !remote.savedTVs.isEmpty {
+            return "\(remote.savedTVs.count) ТВ"
+        }
+        return nil
     }
 
     private var kenwoodSubtitle: String {
@@ -202,6 +218,9 @@ struct SuperAppHomeView: View {
         }
         if !kenwood.discoveredDevices.isEmpty {
             return "Найдено устройств: \(kenwood.discoveredDevices.count)"
+        }
+        if let audioName = kenwood.connectedBluetoothAudioName {
+            return "Bluetooth Audio: \(audioName)"
         }
         return "Плеер · 13-band EQ · DSP · DTA · Подсветка"
     }
@@ -240,7 +259,6 @@ struct SuperAppHomeView: View {
             VStack(spacing: 22) {
                 Spacer(minLength: 14)
 
-                // Заголовок супераппа
                 VStack(spacing: 10) {
                     Image(systemName: "dot.radiowaves.left.and.right")
                         .font(.system(size: 33, weight: .bold))
@@ -257,18 +275,17 @@ struct SuperAppHomeView: View {
                         .foregroundStyle(.white.opacity(0.60))
                 }
 
-                // Основные кнопки главного меню в нативном Liquid Glass контейнере
                 NativeGlassContainer(spacing: 14) {
                     VStack(spacing: 14) {
                         SuperAppMenuCard(
                             symbol: "tv.fill",
-                            title: "Пульт Сбер",
-                            subtitle: sberSubtitle,
-                            badgeText: sberReady ? "Готов" : nil,
-                            badgeActive: sberReady,
+                            title: "Пульт ТВ",
+                            subtitle: tvSubtitle,
+                            badgeText: tvBadgeText,
+                            badgeActive: remote.isShowingRemotePad && remote.isChannelReady,
                             accentIcon: true,
                             theme: .sber,
-                            action: onOpenSber
+                            action: onOpenTVRemote
                         )
 
                         SuperAppMenuCard(
@@ -411,170 +428,38 @@ private struct SuperAppMenuCard: View {
     }
 }
 
-// MARK: - Экран подключения в стиле Сбер Liquid Glass
-
-struct ConnectionView: View {
-    @ObservedObject var remote: SberCastRemote
-    let onBackToMenu: () -> Void
-
-    var body: some View {
-        VStack(spacing: 22) {
-            HStack {
-                Button {
-                    Haptics.tap()
-                    onBackToMenu()
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 13, weight: .bold))
-                        Text("Меню")
-                            .font(.subheadline.weight(.semibold))
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .frame(height: 36)
-                    .sberGlassPanel(cornerRadius: 18, interactive: true)
-                }
-                .buttonStyle(RemotePressStyle())
-                Spacer()
-            }
-
-            Spacer(minLength: 6)
-
-            VStack(spacing: 12) {
-                Image(systemName: "tv.fill")
-                    .font(.system(size: 36, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 88, height: 88)
-                    .sberGlassCircle(highlighted: false, accent: true, interactive: false)
-
-                Text("Salute Remote+")
-                    .font(.system(size: 29, weight: .bold, design: .rounded))
-                    .foregroundStyle(SberPalette.brandGradient)
-
-                Text("Умный пульт Салют ТВ по Wi‑Fi")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.62))
-            }
-
-            StatusCard(remote: remote)
-
-            if !remote.devices.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Найденные телевизоры")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.70))
-                        .padding(.leading, 4)
-
-                    ForEach(remote.devices, id: \.id) { device in
-                        Button {
-                            remote.connect(device)
-                            Haptics.tap()
-                        } label: {
-                            HStack(spacing: 14) {
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 13, style: .continuous)
-                                        .fill(SberPalette.accentButtonGradient)
-                                        .opacity(0.28)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                                                .strokeBorder(SberPalette.glassAccentBorder, lineWidth: 1)
-                                                .opacity(0.6)
-                                        )
-                                    Image(systemName: "tv")
-                                        .font(.title3.weight(.semibold))
-                                        .foregroundStyle(SberPalette.lime)
-                                }
-                                .frame(width: 44, height: 44)
-
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(device.name)
-                                        .font(.headline)
-                                        .foregroundStyle(.white)
-                                    Text(device.features?.contains(.gamepadService) == true ? "Пульт Салют доступен" : "Устройство найдено")
-                                        .font(.caption)
-                                        .foregroundStyle(SberPalette.teal.opacity(0.85))
-                                }
-
-                                Spacer()
-
-                                Image(systemName: "chevron.right")
-                                    .font(.footnote.weight(.bold))
-                                    .foregroundStyle(.white.opacity(0.42))
-                            }
-                            .padding(14)
-                            .sberGlassPanel(cornerRadius: 22, interactive: true)
-                        }
-                        .buttonStyle(RemotePressStyle())
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            Spacer(minLength: 20)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
-    }
-}
-
-struct StatusCard: View {
-    @ObservedObject var remote: SberCastRemote
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Circle()
-                .fill(remote.error == nil ? SberPalette.brightGreen : SberPalette.coral)
-                .frame(width: 10, height: 10)
-                .shadow(color: (remote.error == nil ? SberPalette.brightGreen : SberPalette.coral).opacity(0.75), radius: 5)
-
-            Text(remote.error ?? remote.status)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.white.opacity(0.88))
-                .lineLimit(2)
-
-            Spacer()
-
-            if remote.devices.isEmpty {
-                ProgressView()
-                    .tint(SberPalette.brightGreen)
-            }
-        }
-        .padding(15)
-        .sberGlassPanel(cornerRadius: 20, interactive: false)
-    }
-}
-
-// MARK: - Главный экран пульта (фиксированный, без прокрутки)
+// MARK: - Универсальный экран пульта ТВ (дизайн по референсу, без кнопок сервисов)
 
 struct RemotePadView: View {
-    @ObservedObject var remote: SberCastRemote
+    @ObservedObject var remote: UniversalTVRemoteManager
     let onBackToMenu: () -> Void
+
     @AppStorage("SaluteRemotePlus.padMode") private var storedPadModeRaw = CenterPadMode.dpad.rawValue
     @State private var showTextSheet = false
-    @State private var initialTextSheetMode: TextSheetMode = .globalSearch
+    @State private var showTVHubSheet = false
 
     private var padMode: CenterPadMode {
-        CenterPadMode(rawValue: storedPadModeRaw) ?? .dpad
+        let candidate = CenterPadMode(rawValue: storedPadModeRaw) ?? .dpad
+        return remote.availablePadModes.contains(candidate) ? candidate : .dpad
     }
 
     private func selectPadMode(_ next: CenterPadMode) {
-        guard next != padMode else { return }
+        guard remote.availablePadModes.contains(next), next != padMode else { return }
         Haptics.medium()
-        withAnimation(.spring(response: 0.26, dampingFraction: 0.84)) {
+        withAnimation(.spring(response: 0.24, dampingFraction: 0.86)) {
             storedPadModeRaw = next.rawValue
         }
         remote.setControllerMode(next.wireMode)
     }
 
-    private var channelColor: Color {
-        if remote.session != nil && remote.wireReady { return SberPalette.brightGreen }
-        return remote.error == nil ? Color.orange : SberPalette.coral
-    }
-
-    private var channelText: String {
-        if remote.session == nil { return "Подключение канала…" }
-        return remote.wireReady ? "Пульт готов" : "Открываем канал…"
+    private func cyclePadMode() {
+        let modes = remote.availablePadModes
+        guard modes.count > 1 else { return }
+        if let idx = modes.firstIndex(of: padMode) {
+            selectPadMode(modes[(idx + 1) % modes.count])
+        } else {
+            selectPadMode(modes[0])
+        }
     }
 
     var body: some View {
@@ -582,352 +467,338 @@ struct RemotePadView: View {
             let h = proxy.size.height
             let w = proxy.size.width
             let compact = h < 700
-            let vSpacing: CGFloat = compact ? 7 : 10
-            let rowHeight = min(max(h * 0.076, 46), 60)
+            let gridSpacing: CGFloat = 10
+            let cellHeight: CGFloat = min(max(h * 0.072, 50), 62)
 
-            VStack(spacing: vSpacing) {
-                // Верхняя панель устройства в нативном GlassEffectContainer
-                NativeGlassContainer(spacing: 8) {
-                    HStack(spacing: 8) {
-                        Button {
-                            Haptics.tap()
-                            onBackToMenu()
-                        } label: {
-                            Image(systemName: "square.grid.2x2.fill")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.92))
-                                .frame(width: 38, height: 38)
-                                .sberGlassCircle()
-                        }
-                        .buttonStyle(RemotePressStyle())
-                        .accessibilityLabel("Главное меню")
+            VStack(spacing: compact ? 12 : 16) {
+                // 1. Верхняя панель: [Питание] [Имя ТВ ⌄]     [Режим] [Закрыть]
+                HStack(spacing: 12) {
+                    CircularPowerButton(
+                        isActive: remote.isChannelReady,
+                        onDown: { remote.sendDown(.power) },
+                        onUp: { remote.sendUp(.power) }
+                    )
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(remote.connectedDevice?.name ?? "Салют ТВ")
-                                .font(.system(size: compact ? 19 : 21, weight: .bold, design: .rounded))
-                                .foregroundStyle(.white)
-                                .lineLimit(1)
-                            HStack(spacing: 6) {
-                                Circle()
-                                    .fill(channelColor)
-                                    .frame(width: 7, height: 7)
-                                    .shadow(color: channelColor.opacity(0.8), radius: 4)
-                                Text(channelText)
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(channelColor)
-                            }
-                        }
-
-                        Spacer()
-
-                        // Быстрый глобальный поиск по ТВ
-                        Button {
-                            Haptics.tap()
-                            initialTextSheetMode = .globalSearch
-                            showTextSheet = true
-                        } label: {
-                            Image(systemName: "magnifyingglass")
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(SberPalette.lime)
-                                .frame(width: 38, height: 38)
-                                .sberGlassCircle()
-                        }
-                        .buttonStyle(RemotePressStyle())
-                        .accessibilityLabel("Глобальный поиск по ТВ")
-
-                        if remote.session == nil {
-                            Button {
-                                Haptics.tap()
-                                remote.reconnectChannel()
-                            } label: {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(SberPalette.brightGreen)
-                                    .frame(width: 38, height: 38)
-                                    .sberGlassCircle()
-                            }
-                            .buttonStyle(RemotePressStyle())
-                            .accessibilityLabel("Переподключить канал")
-                        }
-
-                        Button {
-                            Haptics.tap()
-                            remote.forgetSavedDevice()
-                        } label: {
-                            Image(systemName: "link.badge.plus")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.90))
-                                .frame(width: 38, height: 38)
-                                .sberGlassCircle()
-                        }
-                        .buttonStyle(RemotePressStyle())
-                        .accessibilityLabel("Сменить телевизор")
-                    }
-                }
-
-                // Ряд 1: Питание (нажатие / удержание), Настройки, Найти пульт
-                NativeGlassContainer(spacing: 10) {
-                    HStack(spacing: 10) {
-                        PowerRemoteButton(
-                            height: rowHeight,
-                            onDown: { remote.sendDown(.power) },
-                            onUp: { remote.sendUp(.power) }
-                        )
-                        ActionRemoteButton(
-                            symbol: "gearshape.fill",
-                            title: "Настройки",
-                            height: rowHeight
-                        ) {
-                            send(.settings)
-                        }
-                        ActionRemoteButton(
-                            symbol: "dot.radiowaves.left.and.right",
-                            title: "Найти пульт",
-                            height: rowHeight
-                        ) {
-                            Haptics.tap()
-                            remote.findRemote()
-                        }
-                    }
-                }
-
-                // Центр: Liquid Glass дека с нативным iOS 26–27 segmented Picker (Кнопки / Жесты / Курсор / Аэро)
-                ZStack {
-                    LiquidGlassPanel(cornerRadius: 30)
-
-                    VStack(spacing: compact ? 6 : 8) {
-                        Picker(
-                            "Режим управления",
-                            selection: Binding(
-                                get: { padMode },
-                                set: { selectPadMode($0) }
-                            )
-                        ) {
-                            ForEach(CenterPadMode.allCases) { mode in
-                                Text(mode.title).tag(mode)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .tint(SberPalette.brightGreen)
-                        .padding(.horizontal, 12)
-                        .padding(.top, 10)
-
-                        // Рабочая поверхность выбранного режима
-                        GeometryReader { deckGeo in
-                            let deckH = deckGeo.size.height
-                            let deckW = deckGeo.size.width
-                            let dpadSpacing: CGFloat = compact ? 6 : 8
-                            let dpadBtn = min(max(min((deckW - 56) / 3.25, (deckH - dpadSpacing * 2 - 14) / 3.18), 48), 72)
-                            let okBtn = min(dpadBtn + 6, 78)
-
-                            Group {
-                                switch padMode {
-                                case .dpad:
-                                    NativeGlassContainer(spacing: dpadSpacing) {
-                                        VStack(spacing: dpadSpacing) {
-                                            DPadCircleButton(
-                                                symbol: "chevron.up",
-                                                size: dpadBtn,
-                                                onDown: { remote.sendDown(.up) },
-                                                onUp: { remote.sendUp(.up) }
-                                            )
-                                            HStack(spacing: dpadSpacing) {
-                                                DPadCircleButton(
-                                                    symbol: "chevron.left",
-                                                    size: dpadBtn,
-                                                    onDown: { remote.sendDown(.left) },
-                                                    onUp: { remote.sendUp(.left) }
-                                                )
-                                                DPadCircleButton(
-                                                    title: "OK",
-                                                    size: okBtn,
-                                                    accent: true,
-                                                    onDown: { remote.sendDown(.ok) },
-                                                    onUp: { remote.sendUp(.ok) }
-                                                )
-                                                DPadCircleButton(
-                                                    symbol: "chevron.right",
-                                                    size: dpadBtn,
-                                                    onDown: { remote.sendDown(.right) },
-                                                    onUp: { remote.sendUp(.right) }
-                                                )
-                                            }
-                                            DPadCircleButton(
-                                                symbol: "chevron.down",
-                                                size: dpadBtn,
-                                                onDown: { remote.sendDown(.down) },
-                                                onUp: { remote.sendUp(.down) }
-                                            )
+                    Menu {
+                        if !remote.savedTVs.isEmpty {
+                            Section("Мои телевизоры") {
+                                ForEach(remote.savedTVs) { profile in
+                                    Button {
+                                        Haptics.tap()
+                                        remote.switchToProfile(profile)
+                                    } label: {
+                                        if remote.activeProfile?.id == profile.id {
+                                            Label("\(profile.name) (\(profile.platform.shortBadge))", systemImage: "checkmark")
+                                        } else {
+                                            Label("\(profile.name) (\(profile.platform.shortBadge))", systemImage: profile.platform.symbol)
                                         }
                                     }
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                                case .gestures:
-                                    TouchpadSurfaceView(
-                                        onCommand: { command in
-                                            remote.send(command)
-                                        },
-                                        onDown: { command in
-                                            remote.sendDown(command)
-                                        },
-                                        onUp: { command in
-                                            remote.sendUp(command)
-                                        }
-                                    )
-                                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                                    .padding(.horizontal, 6)
-                                    .padding(.bottom, 6)
-
-                                case .trackpad:
-                                    TrackpadSurfaceView(
-                                        onMove: { dx, dy in
-                                            remote.sendMouseOffset(dx: dx, dy: dy)
-                                        },
-                                        onVerticalScroll: { offset in
-                                            remote.sendMouseVerticalScroll(offset)
-                                        },
-                                        onHorizontalScroll: { offset in
-                                            remote.sendMouseHorizontalScroll(offset)
-                                        },
-                                        onClick: {
-                                            remote.send(.mouseClick)
-                                        },
-                                        onClickDown: {
-                                            remote.sendDown(.mouseClick)
-                                        },
-                                        onClickUp: {
-                                            remote.sendUp(.mouseClick)
-                                        }
-                                    )
-
-                                case .airMouse:
-                                    AirMouseSurfaceView(
-                                        onMove: { dx, dy in
-                                            remote.sendMouseOffset(dx: dx, dy: dy)
-                                        },
-                                        onVerticalScroll: { offset in
-                                            remote.sendMouseVerticalScroll(offset)
-                                        },
-                                        onClickDown: {
-                                            remote.sendDown(.mouseClick)
-                                        },
-                                        onClickUp: {
-                                            remote.sendUp(.mouseClick)
-                                        }
-                                    )
                                 }
                             }
                         }
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                // Нижние ряды кнопок пульта в общем нативном GlassEffectContainer
-                NativeGlassContainer(spacing: 10) {
-                    VStack(spacing: vSpacing) {
-                        // Ряд 2: Назад, Домой
-                        HStack(spacing: 10) {
-                            ActionRemoteButton(
-                                symbol: "arrow.uturn.backward",
-                                title: "Назад",
-                                height: rowHeight
-                            ) {
-                                send(.back)
-                            }
-                            ActionRemoteButton(
-                                symbol: "house.fill",
-                                title: "Домой",
-                                height: rowHeight
-                            ) {
-                                send(.home)
-                            }
-                        }
-
-                        // Ряд 3: Громкость −, Mute, Громкость +
-                        HStack(spacing: 10) {
-                            ActionRemoteButton(
-                                symbol: "speaker.wave.1.fill",
-                                title: "VOL −",
-                                height: rowHeight
-                            ) {
-                                send(.volumeDown)
-                            }
-                            ActionRemoteButton(
-                                symbol: "speaker.slash.fill",
-                                title: "MUTE",
-                                height: rowHeight
-                            ) {
-                                send(.mute)
-                            }
-                            ActionRemoteButton(
-                                symbol: "speaker.wave.3.fill",
-                                title: "VOL +",
-                                height: rowHeight
-                            ) {
-                                send(.volumeUp)
-                            }
-                        }
-
-                        // Ряд 4: Пауза/Плей, Голос
-                        HStack(spacing: 10) {
-                            ActionRemoteButton(
-                                symbol: "playpause.fill",
-                                title: "Пауза / Плей",
-                                height: rowHeight
-                            ) {
-                                send(.playPause)
-                            }
-                            ActionRemoteButton(
-                                symbol: remote.voiceState == .idle ? "mic.fill" : "stop.fill",
-                                title: remote.voiceState == .idle ? "Голос" : (remote.voiceState == .starting ? "Запуск…" : "Слушаю…"),
-                                height: rowHeight,
-                                highlighted: remote.voiceState != .idle
-                            ) {
+                        if !remote.isChannelReady {
+                            Button {
                                 Haptics.tap()
-                                remote.toggleVoice()
+                                remote.reconnectActiveTV()
+                            } label: {
+                                Label("Переподключить", systemImage: "arrow.clockwise")
                             }
+                        }
+
+                        if remote.activePlatform.supportsFindRemote {
+                            Button {
+                                Haptics.tap()
+                                remote.findRemote()
+                            } label: {
+                                Label("Найти физический пульт", systemImage: "dot.radiowaves.left.and.right")
+                            }
+                        }
+
+                        Divider()
+
+                        Button {
+                            Haptics.tap()
+                            showTVHubSheet = true
+                        } label: {
+                            Label("Все телевизоры / Добавить ТВ…", systemImage: "plus.circle")
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Text(remote.activeDeviceName)
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.75))
+                        }
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
+                    }
+
+                    Spacer()
+
+                    // Кнопка переключения режима (тап — следующий режим, удержание — меню выбора)
+                    Menu {
+                        ForEach(remote.availablePadModes) { mode in
+                            Button {
+                                selectPadMode(mode)
+                            } label: {
+                                if mode == padMode {
+                                    Label(mode.title, systemImage: "checkmark")
+                                } else {
+                                    Label(mode.title, systemImage: mode.symbol)
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: padMode.symbol)
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundStyle(.white)
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(Color(white: 0.145)))
+                    } primaryAction: {
+                        cyclePadMode()
+                    }
+                    .accessibilityLabel("Режим пульта: \(padMode.title)")
+
+                    // Кнопка закрытия виртуального пульта (возврат в главное меню)
+                    Button {
+                        Haptics.tap()
+                        onBackToMenu()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 17, weight: .medium))
+                            .foregroundStyle(.white)
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(Color(white: 0.145)))
+                    }
+                    .buttonStyle(RemotePressStyle())
+                    .accessibilityLabel("Закрыть виртуальный пульт")
+                }
+
+                // 2. Строка поиска (без кнопок запуска сервисов) + компактный статус платформы
+                HStack(spacing: 10) {
+                    Button {
+                        Haptics.tap()
+                        showTextSheet = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 16, weight: .medium))
+                            Text("Поиск")
+                                .font(.system(size: 16, weight: .medium))
+                        }
+                        .foregroundStyle(.white.opacity(0.94))
+                        .padding(.horizontal, 18)
+                        .frame(height: 44)
+                        .background(
+                            Capsule().fill(Color(white: 0.14))
+                        )
+                    }
+                    .buttonStyle(RemotePressStyle())
+
+                    Spacer()
+
+                    Button {
+                        Haptics.tap()
+                        if !remote.isChannelReady {
+                            remote.reconnectActiveTV()
+                        } else {
+                            showTVHubSheet = true
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(remote.isChannelReady ? remote.activePlatform.accentColor : Color.orange)
+                                .frame(width: 7, height: 7)
+                            Text(remote.isChannelReady ? remote.activePlatform.shortBadge : remote.statusText)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.white.opacity(0.72))
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, 12)
+                        .frame(height: 34)
+                        .background(
+                            Capsule().fill(Color(white: 0.10))
+                        )
+                    }
+                    .buttonStyle(RemotePressStyle())
+                }
+
+                // 3. Центральная область управления (4 точных режима по референсам)
+                Group {
+                    switch padMode {
+                    case .dpad:
+                        ConcentricDPadRingView(
+                            diameter: min(w - 64, max(h * 0.34, 224), 278),
+                            onDown: { remote.sendDown($0) },
+                            onUp: { remote.sendUp($0) }
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                    case .gestures:
+                        TouchpadSurfaceView(
+                            onCommand: { remote.send($0) },
+                            onDown: { remote.sendDown($0) },
+                            onUp: { remote.sendUp($0) }
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                    case .airMouse:
+                        AirMouseSurfaceView(
+                            onMove: { dx, dy in remote.sendMouseOffset(dx: dx, dy: dy) },
+                            onVerticalScroll: { remote.sendMouseVerticalScroll($0) },
+                            onHorizontalScroll: { remote.sendMouseHorizontalScroll($0) },
+                            onClickDown: { remote.sendDown(.mouseClick) },
+                            onClickUp: { remote.sendUp(.mouseClick) }
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                    case .trackpad:
+                        TrackpadSurfaceView(
+                            onMove: { dx, dy in remote.sendMouseOffset(dx: dx, dy: dy) },
+                            onVerticalScroll: { remote.sendMouseVerticalScroll($0) },
+                            onHorizontalScroll: { remote.sendMouseHorizontalScroll($0) },
+                            onClick: { remote.send(.mouseClick) },
+                            onClickDown: { remote.sendDown(.mouseClick) },
+                            onClickUp: { remote.sendUp(.mouseClick) }
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }
+
+                // 4. Нижний блок кнопок 3×3 (точная сетка из референса: высокий «Назад», Ассистент, VOL+, VOL-, Домой, TV, Настройки, Mute)
+                HStack(spacing: gridSpacing) {
+                    // Колонка 1: Высокая «Назад» (2 строки) + «Без звука» (1 строка)
+                    VStack(spacing: gridSpacing) {
+                        MinimalRemoteKeyButton(
+                            height: cellHeight * 2 + gridSpacing,
+                            accessibilityTitle: "Назад"
+                        ) {
+                            Image(systemName: "arrow.uturn.backward")
+                                .font(.system(size: 20, weight: .medium))
+                        } action: {
+                            send(.back)
+                        }
+
+                        MinimalRemoteKeyButton(
+                            height: cellHeight,
+                            accessibilityTitle: "Отключить звук"
+                        ) {
+                            Image(systemName: "speaker.slash")
+                                .font(.system(size: 20, weight: .regular))
+                        } action: {
+                            send(.mute)
+                        }
+                    }
+
+                    // Колонка 2: Виртуальный ассистент + VOL + + VOL -
+                    VStack(spacing: gridSpacing) {
+                        MinimalRemoteKeyButton(
+                            height: cellHeight,
+                            highlighted: remote.voiceState != .idle,
+                            highlightTint: remote.activePlatform.accentColor,
+                            accessibilityTitle: "Виртуальный ассистент (\(remote.activePlatform.voiceTitle))"
+                        ) {
+                            AssistantGlyph(
+                                platform: remote.activePlatform,
+                                isListening: remote.voiceState != .idle
+                            )
+                        } action: {
+                            Haptics.tap()
+                            remote.toggleVoice()
+                        }
+
+                        MinimalHoldRemoteKeyButton(
+                            height: cellHeight,
+                            title: "VOL +",
+                            onDown: { remote.sendDown(.volumeUp) },
+                            onUp: { remote.sendUp(.volumeUp) }
+                        )
+
+                        MinimalHoldRemoteKeyButton(
+                            height: cellHeight,
+                            title: "VOL -",
+                            onDown: { remote.sendDown(.volumeDown) },
+                            onUp: { remote.sendUp(.volumeDown) }
+                        )
+                    }
+
+                    // Колонка 3: Домой + TV + Настройки
+                    VStack(spacing: gridSpacing) {
+                        MinimalRemoteKeyButton(
+                            height: cellHeight,
+                            accessibilityTitle: "Домашний экран"
+                        ) {
+                            Image(systemName: "house")
+                                .font(.system(size: 20, weight: .regular))
+                        } action: {
+                            send(.home)
+                        }
+
+                        MinimalRemoteKeyButton(
+                            height: cellHeight,
+                            accessibilityTitle: "Телеканалы / Вход (удержание — Пауза/Плей)",
+                            onLongPress: {
+                                Haptics.medium()
+                                remote.send(.playPause)
+                            }
+                        ) {
+                            Text("TV")
+                                .font(.system(size: 17, weight: .semibold))
+                        } action: {
+                            send(.source)
+                        }
+
+                        MinimalRemoteKeyButton(
+                            height: cellHeight,
+                            accessibilityTitle: "Настройки"
+                        ) {
+                            Image(systemName: "gearshape")
+                                .font(.system(size: 20, weight: .regular))
+                        } action: {
+                            send(.settings)
                         }
                     }
                 }
 
-                // Компактная строка статуса / подсказки без прокрутки и сдвигов
-                Text(footerText)
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(remote.error != nil ? SberPalette.coral : Color.white.opacity(0.46))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
-                    .frame(height: 15)
+                // Ненавязчивая строка ошибки / уведомления (только если есть)
+                if let msg = remote.errorText ?? remote.effectiveNotice {
+                    Text(msg)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(remote.errorText != nil ? SberPalette.coral : Color.white.opacity(0.50))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                        .transition(.opacity)
+                }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, compact ? 6 : 10)
-            .padding(.bottom, compact ? 6 : 10)
+            .padding(.horizontal, 18)
+            .padding(.top, compact ? 10 : 14)
+            .padding(.bottom, compact ? 12 : 18)
             .frame(width: w, height: h)
         }
         .onAppear {
             remote.setControllerMode(padMode.wireMode)
         }
-        .onChange(of: remote.wireReady) { ready in
+        .onChange(of: remote.isChannelReady) { ready in
             if ready {
                 remote.setControllerMode(padMode.wireMode)
             }
         }
-        .sheet(isPresented: $showTextSheet) {
-            TextInputSheet(remote: remote, initialMode: initialTextSheetMode)
+        .onChange(of: remote.activePlatform) { _ in
+            if !remote.availablePadModes.contains(padMode) {
+                padMode = .dpad
+            }
         }
-    }
-
-    private var footerText: String {
-        if let error = remote.error { return error }
-        if let notice = remote.notice { return notice }
-        switch padMode {
-        case .dpad:
-            return "Удерживайте стрелки, OK или «Питание» для долгого нажатия"
-        case .gestures:
-            return "Свайп + удержание · Удержание = долгий OK · ○ Домой · < Назад"
-        case .trackpad:
-            return "Водите пальцем для курсора · Полосы справа и снизу — прокрутка"
-        case .airMouse:
-            return "Наклоняйте телефон для курсора · Кнопка в центре — клик"
+        .sheet(isPresented: $showTextSheet) {
+            TextInputSheet(remote: remote)
+        }
+        .sheet(isPresented: $showTVHubSheet) {
+            TVHubConnectionView(remote: remote, isPresentedAsSheet: true) {
+                showTVHubSheet = false
+            }
         }
     }
 
@@ -937,40 +808,32 @@ struct RemotePadView: View {
     }
 }
 
-// MARK: - Кнопка питания с поддержкой удержания (меню перезагрузки/выключения ТВ)
+// MARK: - Круглая кнопка питания слева сверху (как на референсе)
 
-struct PowerRemoteButton: View {
-    let height: CGFloat
+private struct CircularPowerButton: View {
+    let isActive: Bool
     let onDown: () -> Void
     let onUp: () -> Void
 
     @GestureState private var gesturePressed = false
     @State private var isPressed = false
-    @State private var isHoldingMenu = false
+    @State private var isHolding = false
     @State private var holdTask: Task<Void, Never>?
 
     var body: some View {
-        VStack(spacing: 4) {
+        ZStack {
+            Circle()
+                .fill(isHolding ? SberPalette.coral : (isActive ? Color.white : Color(white: 0.145)))
+
             Image(systemName: "power")
-                .font(.system(size: height > 52 ? 19 : 17, weight: .bold))
-            Text(isHoldingMenu ? "Меню ТВ…" : "Питание")
-                .font(.caption2.weight(.semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .font(.system(size: 19, weight: .semibold))
+                .foregroundStyle(isHolding ? .white : (isActive ? Color.black : Color.white))
         }
-        .foregroundStyle(isHoldingMenu ? .white : SberPalette.coral)
-        .frame(maxWidth: .infinity)
-        .frame(height: height)
-        .nativeLiquidGlass(
-            in: RoundedRectangle(cornerRadius: 18, style: .continuous),
-            tint: SberPalette.coral.opacity(isHoldingMenu ? 0.78 : (isPressed ? 0.36 : 0.20)),
-            interactive: true
-        )
-        .shadow(color: isHoldingMenu ? SberPalette.coral.opacity(0.35) : Color.black.opacity(0.20), radius: 8, y: 4)
-        .scaleEffect(isPressed ? 0.95 : 1.0)
+        .frame(width: 44, height: 44)
+        .scaleEffect(isPressed ? 0.92 : 1.0)
         .animation(.easeOut(duration: 0.12), value: isPressed)
-        .animation(.easeOut(duration: 0.15), value: isHoldingMenu)
-        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .animation(.easeOut(duration: 0.15), value: isHolding)
+        .contentShape(Circle())
         .gesture(
             DragGesture(minimumDistance: 0)
                 .updating($gesturePressed) { _, state, _ in
@@ -978,22 +841,16 @@ struct PowerRemoteButton: View {
                 }
         )
         .onChange(of: gesturePressed) { active in
-            if active {
-                beginPress()
-            } else {
-                endPress()
-            }
+            if active { beginPress() } else { endPress() }
         }
-        .onDisappear {
-            endPress()
-        }
-        .accessibilityLabel("Питание. Короткое нажатие — включить или выключить. Удержание — меню перезагрузки и выключения.")
+        .onDisappear { endPress() }
+        .accessibilityLabel("Включить или выключить телевизор")
     }
 
     private func beginPress() {
         guard !isPressed else { return }
         isPressed = true
-        isHoldingMenu = false
+        isHolding = false
         Haptics.tap()
         onDown()
 
@@ -1003,7 +860,7 @@ struct PowerRemoteButton: View {
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 guard isPressed else { return }
-                isHoldingMenu = true
+                isHolding = true
                 Haptics.heavy()
             }
         }
@@ -1014,12 +871,287 @@ struct PowerRemoteButton: View {
         holdTask = nil
         guard isPressed else { return }
         isPressed = false
-        isHoldingMenu = false
+        isHolding = false
         onUp()
     }
 }
 
-// MARK: - Сенсорная панель жестов
+// MARK: - Концентрический круглый D-Pad (точный референс IMG_0141)
+
+private struct ConcentricDPadRingView: View {
+    let diameter: CGFloat
+    let onDown: (RemoteCommand) -> Void
+    let onUp: (RemoteCommand) -> Void
+
+    @GestureState private var touchActive = false
+    @State private var activeCommand: RemoteCommand?
+
+    private var innerDiameter: CGFloat {
+        diameter * 0.43
+    }
+
+    var body: some View {
+        ZStack {
+            // Внешнее матовое кольцо
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [Color(white: 0.135), Color(white: 0.105)],
+                        center: .center,
+                        startRadius: innerDiameter * 0.5,
+                        endRadius: diameter * 0.5
+                    )
+                )
+                .overlay(
+                    Circle()
+                        .strokeBorder(Color.white.opacity(0.05), lineWidth: 1)
+                )
+
+            // Подсветка нажатого сектора кольца
+            if let active = activeCommand, active != .ok {
+                dpadSectorHighlight(for: active)
+            }
+
+            // 4 белые стрелки на кольце
+            VStack {
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(activeCommand == .up ? Color.white : Color.white.opacity(0.90))
+                    .padding(.top, diameter * 0.085)
+                Spacer()
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(activeCommand == .down ? Color.white : Color.white.opacity(0.90))
+                    .padding(.bottom, diameter * 0.085)
+            }
+
+            HStack {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(activeCommand == .left ? Color.white : Color.white.opacity(0.90))
+                    .padding(.leading, diameter * 0.085)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(activeCommand == .right ? Color.white : Color.white.opacity(0.90))
+                    .padding(.trailing, diameter * 0.085)
+            }
+
+            // Центральная утопленная кнопка OK
+            Circle()
+                .fill(activeCommand == .ok ? Color(white: 0.16) : Color(white: 0.055))
+                .frame(width: innerDiameter, height: innerDiameter)
+                .overlay(
+                    Circle()
+                        .strokeBorder(Color.white.opacity(activeCommand == .ok ? 0.18 : 0.04), lineWidth: 1)
+                )
+                .overlay(
+                    Text("OK")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(.white)
+                )
+                .scaleEffect(activeCommand == .ok ? 0.94 : 1.0)
+                .animation(.easeOut(duration: 0.10), value: activeCommand == .ok)
+        }
+        .frame(width: diameter, height: diameter)
+        .contentShape(Circle())
+        .gesture(
+            DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                .updating($touchActive) { _, state, _ in
+                    state = true
+                }
+                .onChanged { value in
+                    if activeCommand == nil {
+                        let cmd = resolveCommand(at: value.startLocation)
+                        activeCommand = cmd
+                        Haptics.tap()
+                        onDown(cmd)
+                    }
+                }
+                .onEnded { _ in
+                    releaseActive()
+                }
+        )
+        .onChange(of: touchActive) { active in
+            if !active {
+                releaseActive()
+            }
+        }
+        .onDisappear {
+            releaseActive()
+        }
+    }
+
+    private func resolveCommand(at point: CGPoint) -> RemoteCommand {
+        let center = CGPoint(x: diameter * 0.5, y: diameter * 0.5)
+        let dx = point.x - center.x
+        let dy = point.y - center.y
+        let dist = hypot(dx, dy)
+        if dist <= innerDiameter * 0.54 {
+            return .ok
+        }
+        if abs(dx) >= abs(dy) {
+            return dx > 0 ? .right : .left
+        } else {
+            return dy > 0 ? .down : .up
+        }
+    }
+
+    private func releaseActive() {
+        guard let cmd = activeCommand else { return }
+        activeCommand = nil
+        onUp(cmd)
+    }
+
+    @ViewBuilder
+    private func dpadSectorHighlight(for command: RemoteCommand) -> some View {
+        let offsetDist = diameter * 0.32
+        let offset: CGSize = {
+            switch command {
+            case .up: return CGSize(width: 0, height: -offsetDist)
+            case .down: return CGSize(width: 0, height: offsetDist)
+            case .left: return CGSize(width: -offsetDist, height: 0)
+            case .right: return CGSize(width: offsetDist, height: 0)
+            default: return .zero
+            }
+        }()
+
+        Circle()
+            .fill(Color.white.opacity(0.11))
+            .frame(width: diameter * 0.34, height: diameter * 0.34)
+            .blur(radius: 10)
+            .offset(offset)
+            .allowsHitTesting(false)
+    }
+}
+
+// MARK: - Минималистичные матовые кнопки нижней сетки 3×3
+
+private struct MinimalRemoteKeyButton<LabelContent: View>: View {
+    let height: CGFloat
+    var highlighted: Bool = false
+    var highlightTint: Color = SberPalette.brightGreen
+    var accessibilityTitle: String = ""
+    var onLongPress: (() -> Void)? = nil
+    @ViewBuilder let label: () -> LabelContent
+    let action: () -> Void
+
+    @State private var isPressed = false
+
+    var body: some View {
+        Button {
+            action()
+        } label: {
+            label()
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: height)
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(highlighted ? highlightTint.opacity(0.45) : Color(white: 0.14))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .strokeBorder(
+                                    highlighted ? highlightTint.opacity(0.75) : Color.white.opacity(0.05),
+                                    lineWidth: 1
+                                )
+                        )
+                )
+        }
+        .buttonStyle(RemotePressStyle())
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.55)
+                .onEnded { _ in
+                    onLongPress?()
+                }
+        )
+        .accessibilityLabel(accessibilityTitle)
+    }
+}
+
+private struct MinimalHoldRemoteKeyButton: View {
+    let height: CGFloat
+    let title: String
+    let onDown: () -> Void
+    let onUp: () -> Void
+
+    @GestureState private var gesturePressed = false
+    @State private var isPressed = false
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(isPressed ? Color(white: 0.22) : Color(white: 0.14))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .strokeBorder(Color.white.opacity(isPressed ? 0.14 : 0.05), lineWidth: 1)
+                    )
+            )
+            .scaleEffect(isPressed ? 0.96 : 1.0)
+            .animation(.easeOut(duration: 0.10), value: isPressed)
+            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .updating($gesturePressed) { _, state, _ in
+                        state = true
+                    }
+            )
+            .onChange(of: gesturePressed) { active in
+                if active {
+                    guard !isPressed else { return }
+                    isPressed = true
+                    Haptics.tap()
+                    onDown()
+                } else {
+                    guard isPressed else { return }
+                    isPressed = false
+                    onUp()
+                }
+            }
+            .onDisappear {
+                if isPressed {
+                    isPressed = false
+                    onUp()
+                }
+            }
+            .accessibilityLabel(title)
+    }
+}
+
+private struct AssistantGlyph: View {
+    let platform: TVPlatform
+    let isListening: Bool
+
+    var body: some View {
+        if isListening {
+            Image(systemName: "waveform")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(.white)
+        } else {
+            switch platform {
+            case .sberSalute:
+                Image(systemName: "hurricane")
+                    .font(.system(size: 21, weight: .semibold))
+                    .foregroundStyle(.white)
+            case .androidTV:
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 19, weight: .medium))
+                    .foregroundStyle(.white)
+            case .yaOS:
+                Image(systemName: "sparkles")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+        }
+    }
+}
+
+// MARK: - Сенсорная панель жестов (точный референс IMG_0137)
 
 enum TouchpadGesture {
     case tapOK
@@ -1074,22 +1206,18 @@ enum TouchpadGestureRecognizer {
         let totalLength = pathLength(points)
         let chord = distance(start, end)
 
-        // 1. Короткое нажатие (тап) → OK
         if totalLength < 20 && chord < 16 {
             return .tapOK
         }
 
-        // 2. Круг (по часовой или против часовой) → Домой
         if isCircle(points, totalLength: totalLength, chord: chord) {
             return .circleHome
         }
 
-        // 3. Жест «<» (верхний правый → левый центр → нижний правый) → Назад
         if isBackChevron(points, totalLength: totalLength) {
             return .chevronBack
         }
 
-        // 4. Свайпы вверх / вниз / влево / вправо
         guard chord >= 26 else { return nil }
         let dx = end.x - start.x
         let dy = end.y - start.y
@@ -1187,8 +1315,6 @@ enum TouchpadGestureRecognizer {
         return true
     }
 
-    /// Распознаёт жест удержания, пока палец ещё на экране:
-    /// неподвижное удержание → OK, прямой свайп с паузой в конце → соответствующая стрелка.
     static func recognizeHold(_ points: [CGPoint]) -> TouchpadGesture? {
         guard let start = points.first, let end = points.last else { return nil }
         let totalLength = pathLength(points)
@@ -1239,23 +1365,36 @@ struct TouchpadSurfaceView: View {
 
     var body: some View {
         ZStack {
-            // Тонкие подсказки направлений по краям сенсорной панели
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(Color(white: 0.125))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.05), lineWidth: 1)
+                )
+
+            // Крупные приглушённые стрелки по 4 сторонам (как на референсе IMG_0137)
             VStack {
                 Image(systemName: "chevron.up")
+                    .font(.system(size: 32, weight: .ultraLight))
+                    .padding(.top, 26)
                 Spacer()
                 HStack {
                     Image(systemName: "chevron.left")
+                        .font(.system(size: 32, weight: .ultraLight))
+                        .padding(.leading, 22)
                     Spacer()
                     Image(systemName: "chevron.right")
+                        .font(.system(size: 32, weight: .ultraLight))
+                        .padding(.trailing, 22)
                 }
                 Spacer()
                 Image(systemName: "chevron.down")
+                    .font(.system(size: 32, weight: .ultraLight))
+                    .padding(.bottom, 26)
             }
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(SberPalette.teal.opacity(0.26))
-            .padding(14)
+            .foregroundStyle(Color.white.opacity(0.24))
+            .allowsHitTesting(false)
 
-            // Индикатор активного удержания или вспышка распознанного жеста
             if let hold = activeHold {
                 VStack(spacing: 6) {
                     Image(systemName: hold.symbol)
@@ -1268,13 +1407,8 @@ struct TouchpadSurfaceView: View {
                 .padding(.vertical, 12)
                 .background(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(SberPalette.accentButtonGradient)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .strokeBorder(SberPalette.glassAccentBorder, lineWidth: 1.4)
-                        )
+                        .fill(Color.white.opacity(0.18))
                 )
-                .shadow(color: SberPalette.brightGreen.opacity(0.42), radius: 12)
                 .transition(.scale(scale: 0.9).combined(with: .opacity))
             } else if let feedback {
                 VStack(spacing: 6) {
@@ -1288,30 +1422,18 @@ struct TouchpadSurfaceView: View {
                 .padding(.vertical, 12)
                 .background(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(SberPalette.accentButtonGradient)
-                        .opacity(0.84)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .strokeBorder(.white.opacity(0.28), lineWidth: 1)
-                        )
+                        .fill(Color.white.opacity(0.16))
                 )
-                .transition(.scale(scale: 0.85).combined(with: .opacity))
+                .transition(.scale(scale: 0.88).combined(with: .opacity))
             } else if trail.isEmpty {
-                VStack(spacing: 6) {
-                    Image(systemName: "hand.draw")
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundStyle(SberPalette.brandGradient)
-                        .opacity(0.72)
-                    Text("Свайпы · Тап = OK · Удержание")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.45))
-                    Text("○ Домой   ·   < Назад")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.30))
-                }
+                Text("Смахивайте для\nперехода по пунктам\nменю")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Color.white.opacity(0.32))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 54)
+                    .allowsHitTesting(false)
             }
 
-            // След пальца в фирменном градиенте Сбера
             if trail.count >= 2 && activeHold == nil {
                 Path { path in
                     path.move(to: trail[0])
@@ -1320,18 +1442,13 @@ struct TouchpadSurfaceView: View {
                     }
                 }
                 .stroke(
-                    LinearGradient(
-                        colors: [SberPalette.teal.opacity(0.4), SberPalette.brightGreen, SberPalette.lime],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    ),
-                    style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round)
+                    Color.white.opacity(0.45),
+                    style: StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round)
                 )
-                .shadow(color: SberPalette.brightGreen.opacity(0.6), radius: 6)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .contentShape(Rectangle())
+        .contentShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .gesture(
             DragGesture(minimumDistance: 0, coordinateSpace: .local)
                 .updating($touchActive) { _, state, _ in
@@ -1452,7 +1569,7 @@ struct TouchpadSurfaceView: View {
             feedback = gesture
         }
         feedbackTask = Task {
-            try? await Task.sleep(nanoseconds: 450_000_000)
+            try? await Task.sleep(nanoseconds: 420_000_000)
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 withAnimation(.easeOut(duration: 0.18)) {
@@ -1463,308 +1580,168 @@ struct TouchpadSurfaceView: View {
     }
 }
 
-// MARK: - Кнопки пульта в стиле Сбер Liquid Glass
-
-struct DPadCircleButton: View {
-    var symbol: String?
-    var title: String?
-    let size: CGFloat
-    var accent = false
-    let onDown: () -> Void
-    let onUp: () -> Void
-
-    @GestureState private var gesturePressed = false
-    @State private var isPressed = false
-    @State private var isHolding = false
-    @State private var holdTask: Task<Void, Never>?
-
-    var body: some View {
-        Group {
-            if let symbol {
-                Image(systemName: symbol)
-            } else {
-                Text(title ?? "")
-            }
-        }
-        .font(.system(size: title == nil ? 21 : 18, weight: .bold))
-        .foregroundStyle(.white)
-        .frame(width: size, height: size)
-        .sberGlassCircle(
-            highlighted: isHolding || (isPressed && !accent),
-            accent: accent,
-            interactive: true
-        )
-        .overlay(
-            Circle()
-                .strokeBorder(
-                    isHolding ? SberPalette.lime : Color.clear,
-                    lineWidth: isHolding ? 2 : 0
-                )
-        )
-        .scaleEffect(isPressed ? 0.92 : 1.0)
-        .animation(.easeOut(duration: 0.1), value: isPressed)
-        .animation(.easeOut(duration: 0.14), value: isHolding)
-        .contentShape(Circle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .updating($gesturePressed) { _, state, _ in
-                    state = true
-                }
-        )
-        .onChange(of: gesturePressed) { active in
-            if active {
-                beginPress()
-            } else {
-                endPress()
-            }
-        }
-        .onDisappear {
-            endPress()
-        }
-    }
-
-    private func beginPress() {
-        guard !isPressed else { return }
-        isPressed = true
-        isHolding = false
-        Haptics.tap()
-        onDown()
-
-        holdTask?.cancel()
-        holdTask = Task {
-            try? await Task.sleep(nanoseconds: 420_000_000)
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                guard isPressed else { return }
-                isHolding = true
-                Haptics.medium()
-            }
-        }
-    }
-
-    private func endPress() {
-        holdTask?.cancel()
-        holdTask = nil
-        guard isPressed else { return }
-        isPressed = false
-        isHolding = false
-        onUp()
-    }
-}
-
-struct ActionRemoteButton: View {
-    let symbol: String
-    let title: String
-    let height: CGFloat
-    var highlighted = false
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                Image(systemName: symbol)
-                    .font(.system(size: height > 52 ? 19 : 17, weight: .semibold))
-                    .foregroundStyle(highlighted ? AnyShapeStyle(Color.white) : AnyShapeStyle(SberPalette.brandGradient))
-                Text(title)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.white.opacity(highlighted ? 1.0 : 0.88))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: height)
-            .sberGlassPanel(cornerRadius: 18, highlighted: highlighted, interactive: true)
-        }
-        .buttonStyle(RemotePressStyle())
-    }
-}
-
-struct RemotePressStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.94 : 1.0)
-            .opacity(configuration.isPressed ? 0.84 : 1.0)
-            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
-    }
-}
-
-// MARK: - Глобальный поиск по ТВ и ввод с клавиатуры
+// MARK: - Компактная панель ввода текста и поиска (референс IMG_0140)
 
 struct TextInputSheet: View {
-    @ObservedObject var remote: SberCastRemote
-    let initialMode: TextSheetMode
-
+    @ObservedObject var remote: UniversalTVRemoteManager
     @Environment(\.dismiss) private var dismiss
-    @State private var mode: TextSheetMode = .globalSearch
     @State private var text = ""
     @FocusState private var focused: Bool
 
     var body: some View {
-        NativeNavigationContainer {
-            ZStack {
-                SberLiquidBackdrop()
+        ZStack {
+            Color(red: 0.08, green: 0.08, blue: 0.09)
+                .ignoresSafeArea()
 
-                VStack(spacing: 16) {
-                    // Нативный iOS 26–27 segmented Picker
-                    Picker("Режим", selection: $mode) {
-                        ForEach(TextSheetMode.allCases) { tab in
-                            Text(tab.title).tag(tab)
+            VStack(spacing: 14) {
+                // Главная строка ввода с кнопками ▲ и ▼ справа (как на IMG_0140)
+                HStack(spacing: 10) {
+                    HStack(spacing: 8) {
+                        TextField("Поиск или ввод текста…", text: $text)
+                            .focused($focused)
+                            .submitLabel(.search)
+                            .foregroundStyle(.white)
+                            .onSubmit {
+                                runSearch()
+                            }
+
+                        if !text.isEmpty {
+                            Button {
+                                text = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.white.opacity(0.45))
+                            }
                         }
                     }
-                    .pickerStyle(.segmented)
-                    .tint(SberPalette.brightGreen)
-                    .onChange(of: mode) { _ in
-                        Haptics.tap()
-                    }
-
-                Text(
-                    mode == .globalSearch
-                        ? "Отправляет запрос сразу в системный поиск Салют ТВ — открывать строку поиска на экране не нужно."
-                        : "Сначала откройте поле ввода на ТВ (OK). Поддерживаются русский и английский."
-                )
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.58))
-                .multilineTextAlignment(.center)
-
-                // Поле ввода в стиле Liquid Glass
-                HStack(spacing: 8) {
-                    Image(systemName: mode == .globalSearch ? "magnifyingglass" : "keyboard")
-                        .foregroundStyle(SberPalette.brightGreen)
-                    TextField(
-                        mode == .globalSearch ? "Фильм, сериал, приложение…" : "Что набрать на ТВ…",
-                        text: $text
+                    .padding(.horizontal, 14)
+                    .frame(height: 52)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color(white: 0.16))
                     )
-                    .focused($focused)
-                    .submitLabel(mode == .globalSearch ? .search : .send)
-                    .onSubmit {
-                        if mode == .globalSearch {
-                            runGlobalSearch()
-                        } else {
-                            sendText(submit: true)
-                        }
-                    }
-                    if !text.isEmpty {
-                        Button {
-                            text = ""
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.white.opacity(0.45))
-                        }
-                    }
-                }
-                .padding(14)
-                .background(LiquidGlassPanel(cornerRadius: 16))
 
-                if mode == .globalSearch {
                     Button {
-                        runGlobalSearch()
+                        Haptics.tap()
+                        remote.send(.up)
                     } label: {
-                        Label("Найти на ТВ", systemImage: "magnifyingglass")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 15)
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 52, height: 52)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(Color(white: 0.16))
+                            )
                     }
-                    .buttonStyle(SberPrimaryButtonStyle(disabled: trimmedText.isEmpty))
+                    .buttonStyle(RemotePressStyle())
+                    .accessibilityLabel("Вверх")
+
+                    Button {
+                        Haptics.tap()
+                        remote.send(.down)
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 52, height: 52)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(Color(white: 0.16))
+                            )
+                    }
+                    .buttonStyle(RemotePressStyle())
+                    .accessibilityLabel("Вниз")
+                }
+
+                // Быстрые действия: Найти / Ввести / YouTube / Стереть / Enter
+                HStack(spacing: 8) {
+                    Button {
+                        runSearch()
+                    } label: {
+                        Label("Найти", systemImage: "magnifyingglass")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(trimmedText.isEmpty ? .white.opacity(0.4) : .black)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(trimmedText.isEmpty ? Color(white: 0.16) : Color.white)
+                            )
+                    }
                     .disabled(trimmedText.isEmpty)
+
+                    Button {
+                        sendText(submit: true)
+                    } label: {
+                        Text("Ввести")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white.opacity(text.isEmpty ? 0.4 : 0.95))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(Color(white: 0.16))
+                            )
+                    }
+                    .disabled(text.isEmpty)
 
                     Button {
                         Haptics.tap()
                         remote.youtubeSearch(trimmedText)
                         dismiss()
                     } label: {
-                        Label("Искать на YouTube", systemImage: "play.rectangle.fill")
-                            .font(.subheadline.weight(.semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 13)
+                        Image(systemName: "play.rectangle.fill")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.white.opacity(trimmedText.isEmpty ? 0.35 : 0.92))
+                            .frame(width: 48, height: 44)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(Color(white: 0.16))
+                            )
                     }
-                    .buttonStyle(SberGlassButtonStyle(disabled: trimmedText.isEmpty))
                     .disabled(trimmedText.isEmpty)
-                } else {
-                    HStack(spacing: 10) {
-                        Button {
-                            Haptics.tap()
-                            remote.sendKey(KeyMap.backspace)
-                        } label: {
-                            Label("Стереть", systemImage: "delete.left")
-                                .font(.subheadline.weight(.semibold))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                        }
-                        .buttonStyle(SberGlassButtonStyle())
-
-                        Button {
-                            Haptics.tap()
-                            remote.sendKey(KeyMap.enter)
-                        } label: {
-                            Label("Enter", systemImage: "return")
-                                .font(.subheadline.weight(.semibold))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                        }
-                        .buttonStyle(SberGlassButtonStyle())
-                    }
+                    .accessibilityLabel("Искать на YouTube")
 
                     Button {
-                        sendText(submit: true)
+                        Haptics.tap()
+                        remote.sendKey(KeyMap.backspace)
                     } label: {
-                        Text("Набрать и нажать Enter")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 15)
+                        Image(systemName: "delete.left")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .frame(width: 48, height: 44)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(Color(white: 0.16))
+                            )
                     }
-                    .buttonStyle(SberPrimaryButtonStyle(disabled: text.isEmpty))
-                    .disabled(text.isEmpty)
+                    .accessibilityLabel("Стереть")
 
-                    HStack(spacing: 10) {
-                        Button {
-                            Haptics.tap()
-                            remote.typeText(text, submit: false)
-                        } label: {
-                            Text("Только набрать")
-                                .font(.subheadline.weight(.semibold))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                        }
-                        .buttonStyle(SberGlassButtonStyle(disabled: text.isEmpty))
-                        .disabled(text.isEmpty)
-
-                        Button {
-                            runGlobalSearch()
-                        } label: {
-                            Label("Поиск ТВ", systemImage: "magnifyingglass")
-                                .font(.subheadline.weight(.semibold))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                        }
-                        .buttonStyle(SberGlassButtonStyle(disabled: trimmedText.isEmpty))
-                        .disabled(trimmedText.isEmpty)
+                    Button {
+                        Haptics.tap()
+                        remote.sendKey(KeyMap.enter)
+                    } label: {
+                        Image(systemName: "return")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .frame(width: 48, height: 44)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(Color(white: 0.16))
+                            )
                     }
+                    .accessibilityLabel("Enter")
                 }
 
-                if let notice = remote.notice {
-                    Text(notice)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(SberPalette.lime)
-                        .multilineTextAlignment(.center)
-                }
-
-                Spacer()
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
+                Spacer(minLength: 4)
             }
-            .navigationTitle(mode == .globalSearch ? "Поиск по ТВ" : "Ввод текста")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Закрыть") { dismiss() }
-                }
-            }
+            .padding(.horizontal, 16)
+            .padding(.top, 20)
         }
         .preferredColorScheme(.dark)
-        .nativePresentationSheet()
+        .modifier(CompactSearchSheetDetentModifier())
         .onAppear {
-            mode = initialMode
             focused = true
         }
     }
@@ -1773,7 +1750,7 @@ struct TextInputSheet: View {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func runGlobalSearch() {
+    private func runSearch() {
         guard !trimmedText.isEmpty else { return }
         Haptics.medium()
         remote.tvSearch(trimmedText)
@@ -1785,9 +1762,19 @@ struct TextInputSheet: View {
         guard !text.isEmpty else { return }
         Haptics.tap()
         remote.typeText(text, submit: submit)
-        if remote.notice == nil {
-            text = ""
-            dismiss()
+        text = ""
+        dismiss()
+    }
+}
+
+private struct CompactSearchSheetDetentModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 16.0, *) {
+            content
+                .presentationDetents([.height(175), .medium])
+                .presentationDragIndicator(.visible)
+        } else {
+            content
         }
     }
 }
@@ -1799,23 +1786,25 @@ enum Haptics {
     static func heavy() { UIImpactFeedbackGenerator(style: .heavy).impactOccurred() }
 }
 
-// MARK: - Ввод PIN-кода
+// MARK: - Унифицированный ввод PIN-кода (Сбер Салют 4 цифры / Android TV & YaOS 6 HEX-символов)
 
 struct PinSheet: View {
-    @ObservedObject var remote: SberCastRemote
+    @ObservedObject var remote: UniversalTVRemoteManager
     @FocusState private var focused: Bool
 
     var body: some View {
         ZStack {
-            SberLiquidBackdrop()
+            Color(red: 0.05, green: 0.05, blue: 0.07)
+                .ignoresSafeArea()
 
             VStack(spacing: 18) {
                 ZStack {
-                    LiquidGlassCircle(accent: true)
+                    Circle()
+                        .fill(remote.activePlatform.accentColor.opacity(0.22))
                         .frame(width: 74, height: 74)
                     Image(systemName: "lock.shield.fill")
                         .font(.system(size: 32, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(remote.activePlatform.accentColor)
                 }
                 .padding(.top, 28)
 
@@ -1823,23 +1812,34 @@ struct PinSheet: View {
                     .font(.title2.bold())
                     .foregroundStyle(.white)
 
-                Text("Введите код, который показан на телевизоре \(remote.connectedDevice?.name ?? "")")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.62))
-                    .multilineTextAlignment(.center)
+                Text(
+                    remote.pinIsHex
+                        ? "Введите 6-символьный код (0–9, A–F) с экрана \(remote.pinTargetName)"
+                        : "Введите код, который показан на телевизоре \(remote.pinTargetName)"
+                )
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.62))
+                .multilineTextAlignment(.center)
 
-                TextField("0000", text: $remote.pin)
-                    .keyboardType(.numberPad)
+                TextField(remote.pinIsHex ? "A1B2C3" : "0000", text: $remote.pin)
+                    .keyboardType(remote.pinIsHex ? .asciiCapable : .numberPad)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
                     .multilineTextAlignment(.center)
                     .focused($focused)
-                    .font(.system(size: 34, weight: .bold, design: .monospaced))
+                    .font(.system(size: 32, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.white)
                     .padding()
-                    .background(LiquidGlassPanel(cornerRadius: 18))
+                    .background(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(Color(white: 0.14))
+                    )
 
-                if let error = remote.error {
+                if let error = remote.errorText {
                     Text(error)
                         .font(.caption)
                         .foregroundStyle(SberPalette.coral)
+                        .multilineTextAlignment(.center)
                 }
 
                 Button {
@@ -1848,10 +1848,14 @@ struct PinSheet: View {
                 } label: {
                     Text("Подключить")
                         .font(.headline)
+                        .foregroundStyle(remote.pin.isEmpty ? .white.opacity(0.45) : .black)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 15)
+                        .background(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(remote.pin.isEmpty ? Color(white: 0.16) : Color.white)
+                        )
                 }
-                .buttonStyle(SberPrimaryButtonStyle(disabled: remote.pin.isEmpty))
                 .disabled(remote.pin.isEmpty)
 
                 Button("Отмена") {

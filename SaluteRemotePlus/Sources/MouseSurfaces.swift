@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Режим курсора (Трекпад / Мышь)
+// MARK: - Режим курсора (Трекпад — дизайн с боковыми и нижней шкалами прокрутки)
 
 struct TrackpadSurfaceView: View {
     let onMove: (Float, Float) -> Void
@@ -23,108 +23,85 @@ struct TrackpadSurfaceView: View {
     @State private var gestureEndedNormally = false
 
     var body: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 6) {
-                // Основная сенсорная поверхность трекпада
+        VStack(spacing: 14) {
+            HStack(spacing: 10) {
+                // Левая вертикальная шкала прокрутки (как на референсе)
+                MinimalScrollTickStrip(axis: .vertical) { delta in
+                    onVerticalScroll(delta)
+                }
+                .frame(width: 34)
+
+                // Центральная сенсорная панель трекпада
                 ZStack {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.05),
-                                    SberPalette.teal.opacity(0.04),
-                                    Color.black.opacity(0.16)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .fill(Color(white: 0.125))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            RoundedRectangle(cornerRadius: 28, style: .continuous)
                                 .strokeBorder(
-                                    isHoldingClick
-                                        ? SberPalette.glassAccentBorder
-                                        : LinearGradient(
-                                            colors: [Color.white.opacity(0.18), SberPalette.teal.opacity(0.12)],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                    lineWidth: isHoldingClick ? 1.5 : 1
+                                    isHoldingClick ? Color.white.opacity(0.32) : Color.white.opacity(0.06),
+                                    lineWidth: isHoldingClick ? 1.4 : 1
                                 )
                         )
 
-                    // Едва заметная сетка-подсказка в стиле Сбера
                     if touchPoint == nil && !clickFlash {
-                        VStack(spacing: 6) {
-                            Image(systemName: "cursorarrow.motionlines")
-                                .font(.system(size: 24, weight: .medium))
-                                .foregroundStyle(SberPalette.brandGradient)
-                                .opacity(0.75)
-                            Text("Водите пальцем · Тап = клик")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.white.opacity(0.45))
-                            Text("Удержание = зажать ЛКМ")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.28))
+                        VStack(spacing: 14) {
+                            Image(systemName: "hand.draw.fill")
+                                .font(.system(size: 46, weight: .regular))
+                                .foregroundStyle(Color.white.opacity(0.30))
+
+                            Text("Водите пальцем по панели и управляйте курсором")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(Color.white.opacity(0.34))
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 22)
                         }
                         .allowsHitTesting(false)
                     }
 
-                    // Светящийся ореол под пальцем
                     if let pt = touchPoint {
                         Circle()
                             .fill(
                                 RadialGradient(
                                     colors: [
-                                        (isHoldingClick ? SberPalette.lime : SberPalette.brightGreen).opacity(0.55),
-                                        SberPalette.teal.opacity(0.22),
+                                        Color.white.opacity(isHoldingClick ? 0.34 : 0.22),
+                                        Color.white.opacity(0.05),
                                         Color.clear
                                     ],
                                     center: .center,
                                     startRadius: 2,
-                                    endRadius: isHoldingClick ? 44 : 34
+                                    endRadius: isHoldingClick ? 46 : 36
                                 )
                             )
-                            .frame(width: isHoldingClick ? 88 : 68, height: isHoldingClick ? 88 : 68)
+                            .frame(width: isHoldingClick ? 92 : 72, height: isHoldingClick ? 92 : 72)
                             .position(pt)
                             .allowsHitTesting(false)
                     }
 
                     if isHoldingClick {
                         VStack {
-                            Text("ЛКМ зажата · можно перетаскивать")
-                                .font(.system(size: 10, weight: .semibold))
+                            Text("Перетаскивание (ЛКМ зажата)")
+                                .font(.caption2.weight(.semibold))
                                 .foregroundStyle(.white)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
-                                .background(
-                                    Capsule().fill(SberPalette.accentButtonGradient).opacity(0.85)
-                                )
-                                .padding(.top, 8)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 5)
+                                .background(Capsule().fill(Color.white.opacity(0.18)))
+                                .padding(.top, 12)
                             Spacer()
                         }
                         .allowsHitTesting(false)
                     } else if clickFlash {
-                        HStack(spacing: 5) {
-                            Image(systemName: "hand.tap.fill")
-                            Text("Клик")
-                        }
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
-                        .background(
-                            Capsule()
-                                .fill(SberPalette.accentButtonGradient)
-                                .opacity(0.82)
-                                .overlay(Capsule().strokeBorder(.white.opacity(0.35), lineWidth: 1))
-                        )
-                        .transition(.scale(scale: 0.85).combined(with: .opacity))
-                        .allowsHitTesting(false)
+                        Text("Клик")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(Color.white.opacity(0.18)))
+                            .transition(.scale(scale: 0.88).combined(with: .opacity))
+                            .allowsHitTesting(false)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
                 .gesture(
                     DragGesture(minimumDistance: 0, coordinateSpace: .local)
                         .updating($touchActive) { _, state, _ in
@@ -152,7 +129,6 @@ struct TrackpadSurfaceView: View {
                                         holdTask?.cancel()
                                         holdTask = nil
                                     }
-                                    // Ускорение курсора: плавная точность на малой скорости, быстрый размах на высокой
                                     let accel = 1.35 + min(step * 0.055, 1.55)
                                     onMove(Float(rawDx * accel), Float(rawDy * accel))
                                 }
@@ -192,31 +168,20 @@ struct TrackpadSurfaceView: View {
                     }
                 }
 
-                // Вертикальная полоса прокрутки вдоль правого края
-                ScrollRailView(axis: .vertical) { delta in
+                // Правая вертикальная шкала прокрутки
+                MinimalScrollTickStrip(axis: .vertical) { delta in
                     onVerticalScroll(delta)
                 }
-                .frame(width: 30)
+                .frame(width: 34)
             }
 
-            // Нижняя строка: горизонтальная прокрутка + физическая кнопка ЛКМ
-            HStack(spacing: 6) {
-                ScrollRailView(axis: .horizontal) { delta in
-                    onHorizontalScroll(delta)
-                }
-                .frame(height: 26)
-
-                MouseClickHoldButton(
-                    width: 64,
-                    height: 26,
-                    title: "ЛКМ",
-                    onDown: onClickDown,
-                    onUp: onClickUp
-                )
+            // Нижняя горизонтальная шкала прокрутки
+            MinimalScrollTickStrip(axis: .horizontal) { delta in
+                onHorizontalScroll(delta)
             }
+            .frame(height: 30)
+            .padding(.horizontal, 44)
         }
-        .padding(.horizontal, 10)
-        .padding(.bottom, 10)
         .onDisappear {
             holdTask?.cancel()
             holdTask = nil
@@ -262,7 +227,7 @@ struct TrackpadSurfaceView: View {
             clickFlash = true
         }
         flashTask = Task {
-            try? await Task.sleep(nanoseconds: 320_000_000)
+            try? await Task.sleep(nanoseconds: 300_000_000)
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 withAnimation(.easeOut(duration: 0.16)) {
@@ -273,11 +238,12 @@ struct TrackpadSurfaceView: View {
     }
 }
 
-// MARK: - Режим Аэромыши (управление курсором через гироскоп)
+// MARK: - Режим Аэромыши (круглая кнопка клика + 3 минималистичные шкалы прокрутки)
 
 struct AirMouseSurfaceView: View {
     let onMove: (Float, Float) -> Void
     let onVerticalScroll: (Float) -> Void
+    let onHorizontalScroll: (Float) -> Void
     let onClickDown: () -> Void
     let onClickUp: () -> Void
 
@@ -286,139 +252,46 @@ struct AirMouseSurfaceView: View {
     @AppStorage("SaluteRemotePlus.airMouseSensitivity") private var savedSensitivity: Double = 1.0
     @State private var userPaused = false
 
-    private let sensitivityPresets: [(label: String, value: Double)] = [
-        ("0.7×", 0.7),
-        ("1.0×", 1.0),
-        ("1.5×", 1.5)
-    ]
-
-    private var currentSensitivityLabel: String {
-        let closest = sensitivityPresets.min { abs($0.value - savedSensitivity) < abs($1.value - savedSensitivity) }
-        return closest?.label ?? "1.0×"
-    }
-
     var body: some View {
-        HStack(spacing: 8) {
-            VStack(spacing: 8) {
-                if !airMouse.isAvailable {
-                    Spacer()
-                    VStack(spacing: 8) {
-                        Image(systemName: "gyroscope")
-                            .font(.system(size: 28, weight: .semibold))
-                            .foregroundStyle(SberPalette.coral)
-                        Text("Гироскоп недоступен на этом устройстве")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.75))
-                            .multilineTextAlignment(.center)
-                    }
-                    .padding(.horizontal, 12)
-                    Spacer()
-                } else {
-                    // Центральная область с живым индикатором наклона и большой кнопкой клика
-                    ZStack {
-                        // Внешнее стеклянное кольцо
-                        Circle()
-                            .strokeBorder(
-                                LinearGradient(
-                                    colors: [
-                                        SberPalette.brightGreen.opacity(userPaused ? 0.16 : 0.42),
-                                        SberPalette.teal.opacity(userPaused ? 0.12 : 0.35)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1.2
-                            )
-                            .frame(width: 136, height: 136)
+        VStack(spacing: 22) {
+            HStack(spacing: 14) {
+                MinimalScrollTickStrip(axis: .vertical) { delta in
+                    onVerticalScroll(delta)
+                }
+                .frame(width: 40)
 
-                        // Внутреннее кольцо
-                        Circle()
-                            .strokeBorder(.white.opacity(0.10), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                            .frame(width: 108, height: 108)
-
-                        // Движущийся светящийся маркер наклона гироскопа
-                        if !userPaused {
-                            Circle()
-                                .fill(SberPalette.brandGradient)
-                                .frame(width: 12, height: 12)
-                                .shadow(color: SberPalette.brightGreen.opacity(0.85), radius: 6)
-                                .offset(x: airMouse.tiltX * 56, y: airMouse.tiltY * 56)
-                                .animation(.interactiveSpring(response: 0.14, dampingFraction: 0.78), value: airMouse.tiltX)
-                                .animation(.interactiveSpring(response: 0.14, dampingFraction: 0.78), value: airMouse.tiltY)
-                                .allowsHitTesting(false)
+                ZStack {
+                    if !airMouse.isAvailable {
+                        VStack(spacing: 8) {
+                            Image(systemName: "gyroscope")
+                                .font(.system(size: 32, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.45))
+                            Text("Гироскоп недоступен")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.white.opacity(0.55))
                         }
-
-                        // Крупная тактильная кнопка «Клик / Удержать» в центре
-                        AirMouseTriggerButton(
+                    } else {
+                        AirMouseCenterCircleButton(
                             isPaused: userPaused,
                             onDown: onClickDown,
                             onUp: onClickUp
                         )
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                    // Нижняя строка настроек аэромыши: Пауза и Чувствительность
-                    HStack(spacing: 8) {
-                        Button {
-                            Haptics.tap()
-                            userPaused.toggle()
-                            syncMotionState()
-                        } label: {
-                            HStack(spacing: 5) {
-                                Image(systemName: userPaused ? "play.fill" : "pause.fill")
-                                    .font(.system(size: 11, weight: .bold))
-                                Text(userPaused ? "Включить" : "Пауза")
-                                    .font(.caption2.weight(.semibold))
-                            }
-                            .foregroundStyle(userPaused ? .white : SberPalette.lime)
-                            .padding(.horizontal, 12)
-                            .frame(height: 28)
-                            .background(
-                                Capsule()
-                                    .fill(userPaused ? Color.white.opacity(0.10) : SberPalette.green.opacity(0.28))
-                                    .overlay(
-                                        Capsule().strokeBorder(
-                                            userPaused ? Color.white.opacity(0.18) : SberPalette.brightGreen.opacity(0.55),
-                                            lineWidth: 1
-                                        )
-                                    )
-                            )
-                        }
-                        .buttonStyle(RemotePressStyle())
-
-                        Button {
-                            Haptics.tap()
-                            cycleSensitivity()
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "speedometer")
-                                    .font(.system(size: 11, weight: .semibold))
-                                Text("Скорость \(currentSensitivityLabel)")
-                                    .font(.caption2.weight(.semibold))
-                            }
-                            .foregroundStyle(.white.opacity(0.88))
-                            .padding(.horizontal, 12)
-                            .frame(height: 28)
-                            .background(
-                                Capsule()
-                                    .fill(Color.white.opacity(0.08))
-                                    .overlay(Capsule().strokeBorder(.white.opacity(0.16), lineWidth: 1))
-                            )
-                        }
-                        .buttonStyle(RemotePressStyle())
-                    }
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            // Вертикальная полоса прокрутки вдоль правого края
-            ScrollRailView(axis: .vertical) { delta in
-                onVerticalScroll(delta)
+                MinimalScrollTickStrip(axis: .vertical) { delta in
+                    onVerticalScroll(delta)
+                }
+                .frame(width: 40)
             }
-            .frame(width: 30)
+
+            MinimalScrollTickStrip(axis: .horizontal) { delta in
+                onHorizontalScroll(delta)
+            }
+            .frame(height: 30)
+            .padding(.horizontal, 48)
         }
-        .padding(.horizontal, 10)
-        .padding(.bottom, 10)
         .onAppear {
             airMouse.sensitivity = savedSensitivity
             syncMotionState()
@@ -445,16 +318,9 @@ struct AirMouseSurfaceView: View {
             airMouse.stop()
         }
     }
-
-    private func cycleSensitivity() {
-        let idx = sensitivityPresets.firstIndex { abs($0.value - savedSensitivity) < 0.05 } ?? 1
-        let next = sensitivityPresets[(idx + 1) % sensitivityPresets.count]
-        savedSensitivity = next.value
-        airMouse.sensitivity = next.value
-    }
 }
 
-private struct AirMouseTriggerButton: View {
+private struct AirMouseCenterCircleButton: View {
     let isPaused: Bool
     let onDown: () -> Void
     let onUp: () -> Void
@@ -463,16 +329,20 @@ private struct AirMouseTriggerButton: View {
     @State private var isPressed = false
 
     var body: some View {
-        VStack(spacing: 3) {
-            Image(systemName: isPaused ? "pause.circle.fill" : "hand.tap.fill")
-                .font(.system(size: 22, weight: .bold))
-            Text(isPaused ? "Пауза" : "Клик")
-                .font(.caption2.weight(.bold))
+        ZStack {
+            Circle()
+                .fill(isPressed ? Color(white: 0.22) : Color(white: 0.145))
+                .overlay(
+                    Circle()
+                        .strokeBorder(Color.white.opacity(isPressed ? 0.22 : 0.06), lineWidth: 1)
+                )
+
+            Image(systemName: isPaused ? "pause.fill" : "hand.tap.fill")
+                .font(.system(size: 46, weight: .regular))
+                .foregroundStyle(.white.opacity(0.95))
         }
-        .foregroundStyle(.white)
-        .frame(width: 82, height: 82)
-        .sberGlassCircle(highlighted: isPressed, accent: !isPaused, interactive: true)
-        .scaleEffect(isPressed ? 0.92 : 1.0)
+        .frame(width: 196, height: 196)
+        .scaleEffect(isPressed ? 0.94 : 1.0)
         .animation(.easeOut(duration: 0.1), value: isPressed)
         .contentShape(Circle())
         .gesture(
@@ -502,9 +372,9 @@ private struct AirMouseTriggerButton: View {
     }
 }
 
-// MARK: - Полосы прокрутки и кнопка ЛКМ
+// MARK: - Минималистичная 5-линейная шкала прокрутки (как в официальном пульте)
 
-private struct ScrollRailView: View {
+private struct MinimalScrollTickStrip: View {
     enum Axis { case vertical, horizontal }
 
     let axis: Axis
@@ -516,45 +386,26 @@ private struct ScrollRailView: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(active ? SberPalette.teal.opacity(0.22) : Color.white.opacity(0.06))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(
-                            active ? SberPalette.brightGreen.opacity(0.65) : Color.white.opacity(0.14),
-                            lineWidth: 1
-                        )
-                )
-
+            Color.clear
             if axis == .vertical {
-                VStack(spacing: 6) {
-                    Image(systemName: "chevron.up")
-                        .font(.system(size: 8, weight: .bold))
-                    ForEach(0..<4, id: \.self) { _ in
+                VStack(spacing: 8) {
+                    ForEach(0..<5, id: \.self) { _ in
                         Capsule()
-                            .fill(Color.white.opacity(active ? 0.55 : 0.22))
-                            .frame(width: 10, height: 2)
+                            .fill(Color.white.opacity(active ? 0.92 : 0.45))
+                            .frame(width: 14, height: 1.8)
                     }
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 8, weight: .bold))
                 }
-                .foregroundStyle(active ? SberPalette.lime : .white.opacity(0.32))
             } else {
                 HStack(spacing: 8) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 8, weight: .bold))
-                    ForEach(0..<4, id: \.self) { _ in
+                    ForEach(0..<5, id: \.self) { _ in
                         Capsule()
-                            .fill(Color.white.opacity(active ? 0.55 : 0.22))
-                            .frame(width: 2, height: 8)
+                            .fill(Color.white.opacity(active ? 0.92 : 0.45))
+                            .frame(width: 1.8, height: 14)
                     }
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 8, weight: .bold))
                 }
-                .foregroundStyle(active ? SberPalette.lime : .white.opacity(0.32))
             }
         }
-        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .contentShape(Rectangle())
         .gesture(
             DragGesture(minimumDistance: 0, coordinateSpace: .local)
                 .updating($active) { _, state, _ in
@@ -571,7 +422,6 @@ private struct ScrollRailView: View {
                                 hapticAccum = 0
                                 Haptics.tap()
                             }
-                            // Естественная прокрутка для Android/StarOS AXIS_VSCROLL / AXIS_HSCROLL
                             let scaled: Float = axis == .vertical
                                 ? Float(delta * 0.085)
                                 : Float(-delta * 0.085)
@@ -593,59 +443,5 @@ private struct ScrollRailView: View {
                 hapticAccum = 0
             }
         }
-    }
-}
-
-private struct MouseClickHoldButton: View {
-    let width: CGFloat
-    let height: CGFloat
-    let title: String
-    let onDown: () -> Void
-    let onUp: () -> Void
-
-    @GestureState private var gesturePressed = false
-    @State private var isPressed = false
-
-    var body: some View {
-        Text(title)
-            .font(.system(size: 11, weight: .bold))
-            .foregroundStyle(.white)
-            .frame(width: width, height: height)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isPressed ? SberPalette.accentButtonGradient : LinearGradient(colors: [SberPalette.green.opacity(0.55), SberPalette.teal.opacity(0.45)], startPoint: .leading, endPoint: .trailing))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .strokeBorder(SberPalette.glassAccentBorder, lineWidth: 1)
-                            .opacity(isPressed ? 1.0 : 0.65)
-                    )
-            )
-            .scaleEffect(isPressed ? 0.94 : 1.0)
-            .animation(.easeOut(duration: 0.1), value: isPressed)
-            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .updating($gesturePressed) { _, state, _ in
-                        state = true
-                    }
-            )
-            .onChange(of: gesturePressed) { active in
-                if active {
-                    guard !isPressed else { return }
-                    isPressed = true
-                    Haptics.tap()
-                    onDown()
-                } else {
-                    guard isPressed else { return }
-                    isPressed = false
-                    onUp()
-                }
-            }
-            .onDisappear {
-                if isPressed {
-                    isPressed = false
-                    onUp()
-                }
-            }
     }
 }
