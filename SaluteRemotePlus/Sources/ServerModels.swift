@@ -4,7 +4,7 @@ import SwiftUI
 
 // MARK: - Типы серверов и модели
 
-enum ServerVendor: String, CaseIterable, Codable, Identifiable {
+enum ServerVendor: String, CaseIterable, Codable, Identifiable, Sendable {
     case dellIDRAC
     case iruBMC
     case genericWeb
@@ -68,7 +68,7 @@ enum ServerVendor: String, CaseIterable, Codable, Identifiable {
     }
 }
 
-struct ServerProfile: Identifiable, Codable, Equatable {
+struct ServerProfile: Identifiable, Codable, Equatable, Sendable {
     var id: UUID = UUID()
     var name: String
     var vendor: ServerVendor
@@ -136,7 +136,7 @@ struct ServerProfile: Identifiable, Codable, Equatable {
 
 // MARK: - Состояние и телеметрия сервера (Redfish / Reachability)
 
-enum ServerReachability: Equatable {
+enum ServerReachability: Equatable, Sendable {
     case unknown
     case checking
     case online(latencyMs: Int)
@@ -157,7 +157,7 @@ enum ServerReachability: Equatable {
     }
 }
 
-struct ServerTelemetry: Equatable {
+struct ServerTelemetry: Equatable, Sendable {
     var reachability: ServerReachability = .unknown
     var powerState: String?
     var health: String?
@@ -191,7 +191,7 @@ struct ServerTelemetry: Equatable {
     }
 }
 
-enum ServerPowerAction: String, CaseIterable, Identifiable {
+enum ServerPowerAction: String, CaseIterable, Identifiable, Sendable {
     case on = "On"
     case gracefulShutdown = "GracefulShutdown"
     case gracefulRestart = "GracefulRestart"
@@ -218,7 +218,7 @@ enum ServerPowerAction: String, CaseIterable, Identifiable {
     }
 }
 
-enum NetworkRouteStatus: Equatable {
+enum NetworkRouteStatus: Equatable, Sendable {
     case vpnAndWiFi(interfaceName: String)
     case vpnOnly(interfaceName: String)
     case localWiFi

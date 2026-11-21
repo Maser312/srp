@@ -154,6 +154,12 @@ struct ServerGlassCircle: View {
 
 // MARK: - Главный экран управления серверами Dell / iRU
 
+private struct PendingPowerConfirm: Identifiable {
+    let id = UUID()
+    let server: ServerProfile
+    let action: ServerPowerAction
+}
+
 struct ServerHubView: View {
     @ObservedObject var manager: ServerManager
     let onExit: () -> Void
@@ -163,7 +169,7 @@ struct ServerHubView: View {
     @State private var newServerDefaultVendor: ServerVendor = .dellIDRAC
     @State private var activeConsoleServer: ServerProfile?
     @State private var powerMenuServer: ServerProfile?
-    @State private var pendingConfirmAction: (server: ServerProfile, action: ServerPowerAction)?
+    @State private var pendingConfirmAction: PendingPowerConfirm?
     @State private var pendingDeleteServer: ServerProfile?
 
     var body: some View {
@@ -243,16 +249,16 @@ struct ServerHubView: View {
                     Task { await manager.sendPowerAction(.on, to: server) }
                 }
                 Button("Мягкое выключение (ACPI Shutdown)") {
-                    pendingConfirmAction = (server, .gracefulShutdown)
+                    pendingConfirmAction = PendingPowerConfirm(server: server, action: .gracefulShutdown)
                 }
                 Button("Мягкая перезагрузка (Graceful Restart)") {
-                    pendingConfirmAction = (server, .gracefulRestart)
+                    pendingConfirmAction = PendingPowerConfirm(server: server, action: .gracefulRestart)
                 }
                 Button("Жёсткая перезагрузка (Force Reset)", role: .destructive) {
-                    pendingConfirmAction = (server, .forceRestart)
+                    pendingConfirmAction = PendingPowerConfirm(server: server, action: .forceRestart)
                 }
                 Button("Принудительно обесточить (Force Off)", role: .destructive) {
-                    pendingConfirmAction = (server, .forceOff)
+                    pendingConfirmAction = PendingPowerConfirm(server: server, action: .forceOff)
                 }
                 Button("Переключить индикатор локатора LED") {
                     Task { await manager.toggleLocatorLED(for: server) }
@@ -782,7 +788,7 @@ private struct ServerDashboardCard: View {
                     }
 
                     Text(server.displayAddress)
-                        .font(.caption.monospaced())
+                        .font(.system(.caption, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.68))
                         .lineLimit(1)
 
@@ -1617,7 +1623,7 @@ final class ServerWebConsoleController: ObservableObject {
     private var confirmCompletion: ((Bool) -> Void)?
     private var promptCompletion: ((String?) -> Void)?
 
-    static let desktopUserAgent =
+    nonisolated static let desktopUserAgent =
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15"
 
     func goBack() {
@@ -1807,6 +1813,7 @@ private struct ServerWKWebViewRepresentable: UIViewRepresentable {
         // Пользовательский переключатель UA управляется через controller.setDesktopMode(_:)
     }
 
+    @MainActor
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         let server: ServerProfile
         let password: String
@@ -1824,26 +1831,26 @@ private struct ServerWKWebViewRepresentable: UIViewRepresentable {
         }
 
         func observe(webView: WKWebView) {
-            progressObservation = webView.observe(\.estimatedProgress, options: [.new]) { [weak self] view, _ in
-                let progress = view.estimatedProgress
+            progressObservation = webView.observe(\.estimatedProgress, options: [.new]) { [weak self] _, change in
+                guard let progress = change.newValue else { return }
                 Task { @MainActor [weak self] in
                     self?.controller.estimatedProgress = progress
                 }
             }
-            loadingObservation = webView.observe(\.isLoading, options: [.new]) { [weak self] view, _ in
-                let loading = view.isLoading
+            loadingObservation = webView.observe(\.isLoading, options: [.new]) { [weak self] _, change in
+                guard let loading = change.newValue else { return }
                 Task { @MainActor [weak self] in
                     self?.controller.isLoading = loading
                 }
             }
-            backObservation = webView.observe(\.canGoBack, options: [.new]) { [weak self] view, _ in
-                let can = view.canGoBack
+            backObservation = webView.observe(\.canGoBack, options: [.new]) { [weak self] _, change in
+                guard let can = change.newValue else { return }
                 Task { @MainActor [weak self] in
                     self?.controller.canGoBack = can
                 }
             }
-            forwardObservation = webView.observe(\.canGoForward, options: [.new]) { [weak self] view, _ in
-                let can = view.canGoForward
+            forwardObservation = webView.observe(\.canGoForward, options: [.new]) { [weak self] _, change in
+                guard let can = change.newValue else { return }
                 Task { @MainActor [weak self] in
                     self?.controller.canGoForward = can
                 }
@@ -1884,9 +1891,7 @@ private struct ServerWKWebViewRepresentable: UIViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-            Task { @MainActor [weak self] in
-                self?.controller.lastLoadError = nil
-            }
+            controller.lastLoadError = nil
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -1896,12 +1901,12 @@ private struct ServerWKWebViewRepresentable: UIViewRepresentable {
                 didInitialAutofill = true
             }
 
-            Task { @MainActor [weak self] in
-                guard let self = self else { return }
-                self.controller.currentHostDisplay = hostText
-                self.controller.lastLoadError = nil
+            controller.currentHostDisplay = hostText
+            controller.lastLoadError = nil
 
-                if shouldAutoFill {
+            if shouldAutoFill {
+                Task { @MainActor [weak self] in
+                    guard let self = self else { return }
                     // Задержка нужна для SPA-панелей Dell iDRAC 9 и AMI MegaRAC, которые рендерят форму после DOM load
                     try? await Task.sleep(nanoseconds: 700_000_000)
                     self.controller.injectLoginAutofill(username: self.server.username, password: self.password, submit: false)
@@ -1912,17 +1917,13 @@ private struct ServerWKWebViewRepresentable: UIViewRepresentable {
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
             let nsErr = error as NSError
             if nsErr.code == NSURLErrorCancelled { return }
-            Task { @MainActor [weak self] in
-                self?.controller.lastLoadError = error.localizedDescription
-            }
+            controller.lastLoadError = error.localizedDescription
         }
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
             let nsErr = error as NSError
             if nsErr.code == NSURLErrorCancelled { return }
-            Task { @MainActor [weak self] in
-                self?.controller.lastLoadError = error.localizedDescription
-            }
+            controller.lastLoadError = error.localizedDescription
         }
 
         // Открываем popup-окна (например, HTML5 KVM / Virtual Console в iDRAC и iRU) в этом же WebView
@@ -1945,9 +1946,7 @@ private struct ServerWKWebViewRepresentable: UIViewRepresentable {
             initiatedByFrame frame: WKFrameInfo,
             completionHandler: @escaping () -> Void
         ) {
-            Task { @MainActor [weak self] in
-                self?.controller.presentAlert(message: message, completion: completionHandler)
-            }
+            controller.presentAlert(message: message, completion: completionHandler)
         }
 
         func webView(
@@ -1956,9 +1955,7 @@ private struct ServerWKWebViewRepresentable: UIViewRepresentable {
             initiatedByFrame frame: WKFrameInfo,
             completionHandler: @escaping (Bool) -> Void
         ) {
-            Task { @MainActor [weak self] in
-                self?.controller.presentConfirm(message: message, completion: completionHandler)
-            }
+            controller.presentConfirm(message: message, completion: completionHandler)
         }
 
         func webView(
@@ -1968,9 +1965,7 @@ private struct ServerWKWebViewRepresentable: UIViewRepresentable {
             initiatedByFrame frame: WKFrameInfo,
             completionHandler: @escaping (String?) -> Void
         ) {
-            Task { @MainActor [weak self] in
-                self?.controller.presentPrompt(message: prompt, defaultText: defaultText, completion: completionHandler)
-            }
+            controller.presentPrompt(message: prompt, defaultText: defaultText, completion: completionHandler)
         }
     }
 }

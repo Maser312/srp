@@ -77,7 +77,7 @@ final class ServerManager: ObservableObject {
         }
         monitorStarted = true
         pathMonitor.pathUpdateHandler = { [weak self] path in
-            let route = Self.detectNetworkRoute(from: path)
+            let route = ServerNetworkHelper.detectNetworkRoute(from: path)
             Task { @MainActor [weak self] in
                 self?.networkRoute = route
             }
@@ -87,7 +87,7 @@ final class ServerManager: ObservableObject {
     }
 
     func refreshNetworkRoute() {
-        networkRoute = Self.detectNetworkRoute(from: pathMonitor.currentPath)
+        networkRoute = ServerNetworkHelper.detectNetworkRoute(from: pathMonitor.currentPath)
     }
 
     func lockIfRequired() {
@@ -188,7 +188,7 @@ final class ServerManager: ObservableObject {
         telemetry[profile.id] = checkingState
 
         let startTime = Date()
-        let reachable = await Self.probeTCP(host: host, port: profile.effectivePort, timeoutSeconds: 4.0)
+        let reachable = await ServerNetworkHelper.probeTCP(host: host, port: profile.effectivePort, timeoutSeconds: 4.0)
         let latencyMs = max(1, Int(Date().timeIntervalSince(startTime) * 1000.0))
 
         guard reachable else {
@@ -362,8 +362,8 @@ final class ServerManager: ObservableObject {
         let targets = buildWoLTargets(host: profile.host)
         DispatchQueue.global(qos: .userInitiated).async {
             for targetIP in targets {
-                Self.sendUDPMagicPacket(packet, to: targetIP, port: 9)
-                Self.sendUDPMagicPacket(packet, to: targetIP, port: 7)
+                ServerNetworkHelper.sendUDPMagicPacket(packet, to: targetIP, port: 9)
+                ServerNetworkHelper.sendUDPMagicPacket(packet, to: targetIP, port: 7)
             }
         }
         showNotice("Wake-on-LAN отправлен на \(profile.name)")
@@ -566,32 +566,63 @@ final class ServerManager: ObservableObject {
         }
     }
 
-    // MARK: - Низкоуровневый TCP-пинг, определение VPN и WoL UDP
+    private func buildWoLTargets(host: String?) -> [String] {
+        var result: [String] = ["255.255.255.255"]
+        if let host = host {
+            let octets = host.split(separator: ".")
+            if octets.count == 4, octets.allSatisfy({ UInt8($0) != nil }) {
+                let subnetBroadcast = "\(octets[0]).\(octets[1]).\(octets[2]).255"
+                if !result.contains(subnetBroadcast) {
+                    result.append(subnetBroadcast)
+                }
+            }
+        }
+        return result
+    }
+}
 
-    private static func probeTCP(host: String, port: Int, timeoutSeconds: Double) async -> Bool {
+// MARK: - Неизолированные сетевые утилиты (TCP-пинг, определение Kerio VPN, WoL UDP)
+
+private final class TCPProbeState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var finished = false
+    private let connection: NWConnection
+    private let continuation: CheckedContinuation<Bool, Never>
+
+    init(connection: NWConnection, continuation: CheckedContinuation<Bool, Never>) {
+        self.connection = connection
+        self.continuation = continuation
+    }
+
+    func finish(_ value: Bool) {
+        lock.lock()
+        guard !finished else {
+            lock.unlock()
+            return
+        }
+        finished = true
+        lock.unlock()
+
+        connection.stateUpdateHandler = nil
+        connection.cancel()
+        continuation.resume(returning: value)
+    }
+}
+
+private enum ServerNetworkHelper {
+    static func probeTCP(host: String, port: Int, timeoutSeconds: Double) async -> Bool {
         guard let nwPort = NWEndpoint.Port(rawValue: UInt16(clamping: port)) else { return false }
         return await withCheckedContinuation { continuation in
             let queue = DispatchQueue(label: "com.andrey.saluteremoteplus.tcp-probe")
             let conn = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: .tcp)
-            let lock = NSLock()
-            var finished = false
+            let state = TCPProbeState(connection: conn, continuation: continuation)
 
-            func finish(_ value: Bool) {
-                lock.lock()
-                defer { lock.unlock() }
-                guard !finished else { return }
-                finished = true
-                conn.stateUpdateHandler = nil
-                conn.cancel()
-                continuation.resume(returning: value)
-            }
-
-            conn.stateUpdateHandler = { state in
-                switch state {
+            conn.stateUpdateHandler = { connState in
+                switch connState {
                 case .ready:
-                    finish(true)
+                    state.finish(true)
                 case .failed, .cancelled:
-                    finish(false)
+                    state.finish(false)
                 default:
                     break
                 }
@@ -599,12 +630,12 @@ final class ServerManager: ObservableObject {
 
             conn.start(queue: queue)
             queue.asyncAfter(deadline: .now() + timeoutSeconds) {
-                finish(false)
+                state.finish(false)
             }
         }
     }
 
-    private static func detectNetworkRoute(from path: NWPath) -> NetworkRouteStatus {
+    static func detectNetworkRoute(from path: NWPath) -> NetworkRouteStatus {
         guard path.status == .satisfied else { return .offline }
         let vpnInterface = activeVPNInterfaceName()
         let usesWiFi = path.usesInterfaceType(.wifi) || path.usesInterfaceType(.wiredEthernet)
@@ -620,7 +651,7 @@ final class ServerManager: ObservableObject {
 
     /// Проверяет наличие активного VPN-туннеля (Kerio Control VPN / IPSec / OpenVPN / WireGuard)
     /// по интерфейсам `utun*`, `ipsec*`, `ppp*` с назначенным не-link-local IPv4-адресом.
-    private static func activeVPNInterfaceName() -> String? {
+    static func activeVPNInterfaceName() -> String? {
         var ifaddrPointer: UnsafeMutablePointer<ifaddrs>?
         guard getifaddrs(&ifaddrPointer) == 0, let firstAddr = ifaddrPointer else { return nil }
         defer { freeifaddrs(ifaddrPointer) }
@@ -649,21 +680,7 @@ final class ServerManager: ObservableObject {
         return nil
     }
 
-    private func buildWoLTargets(host: String?) -> [String] {
-        var result: [String] = ["255.255.255.255"]
-        if let host = host {
-            let octets = host.split(separator: ".")
-            if octets.count == 4, octets.allSatisfy({ UInt8($0) != nil }) {
-                let subnetBroadcast = "\(octets[0]).\(octets[1]).\(octets[2]).255"
-                if !result.contains(subnetBroadcast) {
-                    result.append(subnetBroadcast)
-                }
-            }
-        }
-        return result
-    }
-
-    private static func sendUDPMagicPacket(_ packet: [UInt8], to ip: String, port: UInt16) {
+    static func sendUDPMagicPacket(_ packet: [UInt8], to ip: String, port: UInt16) {
         let fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
         guard fd >= 0 else { return }
         defer { close(fd) }
