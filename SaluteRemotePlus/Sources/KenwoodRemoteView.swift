@@ -551,7 +551,7 @@ struct KenwoodRemoteView: View {
                     Text("Подключить ресивер KENWOOD")
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(.white)
-                    Text(kenwood.bluetoothStateText ?? (kenwood.discoveredDevices.isEmpty ? "Bluetooth iAP2 / USB или BLE" : "Найдено устройств: \(kenwood.discoveredDevices.count)"))
+                    Text(bannerSubtitle)
                         .font(.caption)
                         .foregroundStyle(KenwoodPalette.iceBlue)
                         .lineLimit(1)
@@ -565,6 +565,19 @@ struct KenwoodRemoteView: View {
             .background(KenwoodGlassPanel(cornerRadius: 20))
         }
         .buttonStyle(RemotePressStyle())
+    }
+
+    private var bannerSubtitle: String {
+        if let btError = kenwood.bluetoothStateText {
+            return btError
+        }
+        if !kenwood.discoveredDevices.isEmpty {
+            return "Найдено устройств: \(kenwood.discoveredDevices.count)"
+        }
+        if let audioName = kenwood.connectedBluetoothAudioName {
+            return "Bluetooth Audio: \(audioName) · нужен iAP2 OpenLink"
+        }
+        return "Bluetooth iAP2 / USB или BLE"
     }
 
     // MARK: - Вкладка 1: Дисплей ресивера, Круговой энкодер громкости, Источники, Жесты, Тюнер
@@ -1965,6 +1978,7 @@ private struct KenwoodConnectionSheet: View {
     @ObservedObject var kenwood: KenwoodRemoteManager
     let glowColor: Color
     @Environment(\.dismiss) private var dismiss
+    @State private var showAllBLE = false
 
     var body: some View {
         NativeNavigationContainer {
@@ -2031,47 +2045,50 @@ private struct KenwoodConnectionSheet: View {
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 10) {
                             if kenwood.discoveredDevices.isEmpty {
-                                NativeEmptyStateView(
-                                    title: "Ресивер KENWOOD не обнаружен",
-                                    systemImage: "car.fill",
-                                    description: "Подключите iPhone к магнитоле в «Настройках → Bluetooth» или по кабелю USB, затем нажмите «Искать»."
-                                ) {
-                                    EmptyView()
+                                if let audioName = kenwood.connectedBluetoothAudioName {
+                                    bluetoothAudioOnlyCard(
+                                        deviceName: audioName,
+                                        portType: kenwood.connectedBluetoothAudioPortType ?? "Bluetooth Audio"
+                                    )
+                                } else {
+                                    NativeEmptyStateView(
+                                        title: "Ресивер KENWOOD не обнаружен",
+                                        systemImage: "car.fill",
+                                        description: "Подключите iPhone к магнитоле в «Настройках → Bluetooth» или по кабелю USB, затем нажмите «Искать»."
+                                    ) {
+                                        EmptyView()
+                                    }
+                                    .padding(12)
+                                    .background(KenwoodGlassPanel(cornerRadius: 20))
                                 }
-                                .padding(12)
-                                .background(KenwoodGlassPanel(cornerRadius: 20))
                             } else {
                                 ForEach(kenwood.discoveredDevices) { device in
-                                    Button {
-                                        Haptics.medium()
-                                        kenwood.connect(to: device)
-                                        dismiss()
-                                    } label: {
-                                        HStack(spacing: 12) {
-                                            Image(systemName: "car.fill")
-                                                .font(.title3)
-                                                .foregroundStyle(KenwoodPalette.neonRed)
-                                                .frame(width: 42, height: 42)
-                                                .background(KenwoodGlassCircle())
-
-                                            VStack(alignment: .leading, spacing: 3) {
-                                                Text(device.name)
-                                                    .font(.subheadline.weight(.bold))
-                                                    .foregroundStyle(.white)
-                                                Text("\(device.transport.rawValue) · \(device.detail)")
-                                                    .font(.caption2)
-                                                    .foregroundStyle(KenwoodPalette.iceBlue)
-                                            }
-                                            Spacer()
-                                            Image(systemName: "chevron.right")
-                                                .font(.caption.bold())
-                                                .foregroundStyle(.white.opacity(0.45))
-                                        }
-                                        .padding(14)
-                                        .background(KenwoodGlassPanel(cornerRadius: 18))
-                                    }
-                                    .buttonStyle(RemotePressStyle())
+                                    deviceRowButton(device)
                                 }
+                            }
+
+                            if !kenwood.nearbyBLEDevices.isEmpty {
+                                DisclosureGroup(isExpanded: $showAllBLE) {
+                                    VStack(spacing: 8) {
+                                        ForEach(kenwood.nearbyBLEDevices) { device in
+                                            deviceRowButton(device)
+                                        }
+                                    }
+                                    .padding(.top, 8)
+                                } label: {
+                                    HStack {
+                                        Text("Другие BLE-устройства рядом")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(.white.opacity(0.72))
+                                        Spacer()
+                                        Text("\(kenwood.nearbyBLEDevices.count)")
+                                            .font(.caption2.weight(.bold))
+                                            .foregroundStyle(KenwoodPalette.iceBlue)
+                                    }
+                                }
+                                .tint(KenwoodPalette.iceBlue)
+                                .padding(14)
+                                .background(KenwoodGlassPanel(cornerRadius: 18))
                             }
                         }
                     }
@@ -2094,5 +2111,79 @@ private struct KenwoodConnectionSheet: View {
         .onAppear {
             kenwood.refreshDevices()
         }
+    }
+
+    private func deviceRowButton(_ device: KenwoodDiscoveredDevice) -> some View {
+        Button {
+            Haptics.medium()
+            kenwood.connect(to: device)
+            dismiss()
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: device.transport == .mfiBluetooth ? "car.fill" : "wave.3.right")
+                    .font(.title3)
+                    .foregroundStyle(KenwoodPalette.neonRed)
+                    .frame(width: 42, height: 42)
+                    .background(KenwoodGlassCircle())
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(device.name)
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.white)
+                    Text("\(device.transport.rawValue) · \(device.detail)")
+                        .font(.caption2)
+                        .foregroundStyle(KenwoodPalette.iceBlue)
+                        .lineLimit(2)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.bold())
+                    .foregroundStyle(.white.opacity(0.45))
+            }
+            .padding(14)
+            .background(KenwoodGlassPanel(cornerRadius: 18))
+        }
+        .buttonStyle(RemotePressStyle())
+    }
+
+    private func bluetoothAudioOnlyCard(deviceName: String, portType: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Image(systemName: "car.fill")
+                    .font(.title3)
+                    .foregroundStyle(KenwoodPalette.cyan)
+                    .frame(width: 42, height: 42)
+                    .background(KenwoodGlassCircle())
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(deviceName)
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(.white)
+                    Text("\(portType) подключён · канал OpenLink (iAP2) не открыт")
+                        .font(.caption)
+                        .foregroundStyle(KenwoodPalette.amber)
+                }
+                Spacer()
+            }
+
+            Divider().overlay(Color.white.opacity(0.12))
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Что проверить на магнитоле:")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.white.opacity(0.92))
+                Text("1. Откройте MENU → SETTINGS → REMOTE APP → SELECT → iOS → YES.")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.78))
+                Text("2. Выберите источник BT AUDIO или iPod BT (либо подключите iPhone по USB-кабелю).")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.78))
+                Text("3. Переподключите Bluetooth и нажмите «Искать». Диалог «Выбрать BT» показывает только новые несопряжённые аксессуары.")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.68))
+            }
+        }
+        .padding(16)
+        .background(KenwoodGlassPanel(cornerRadius: 20))
     }
 }

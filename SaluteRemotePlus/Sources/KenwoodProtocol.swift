@@ -13,15 +13,86 @@ enum KenwoodOpenLink {
     static let supportedEAProtocols: [String] = [
         "com.jvckenwood.openlink",
         "com.jvckenwood.car.openlink",
+        "com.jvckenwood.openlink.1",
+        "com.jvckenwood.openlink.2",
         "com.jvckenwood.remote",
+        "com.jvckenwood.remoteapp",
+        "com.jvckenwood.kenwoodremote",
+        "com.jvckenwood.kwdremote",
+        "com.jvckenwood.jvcremote",
+        "com.jvckenwood.car.remote",
+        "com.jvckenwood.car.remotecontrol",
+        "com.jvckenwood.remotecontrol",
+        "com.jvckenwood.jkts.openlink",
+        "com.jvckenwood.jkts.kwdremoteapp",
+        "com.jvckenwood.jkts.kwdremoteapp.openlink",
+        "com.jvckenwood.jkts.jvcremoteapp",
         "com.jvckenwood.jsmc",
-        "com.kenwood.openlink",
-        "com.kenwood.remote",
-        "com.kenwood.link",
+        "com.jvckenwood.jkmc",
+        "com.jvckenwood.kmc",
+        "com.jvckenwood.musicplay",
+        "com.jvckenwood.tcc",
+        "com.jvckenwood.car.tcc",
+        "com.jvckenwood.car.app",
+        "com.jvckenwood.car.link",
+        "com.jvckenwood.car.audio",
+        "com.jvckenwood.car.protocol",
+        "com.jvckenwood.protocol",
+        "com.jvckenwood.protocol.openlink",
+        "com.jvckenwood.protocol.remote",
+        "com.jvckenwood.app",
+        "com.jvckenwood.link",
+        "com.jvckenwood.audio",
+        "com.jvckenwood.iap",
+        "com.jvckenwood.iap2",
+        "com.jvckenwood.portal",
         "jp.jvckenwood.openlink",
+        "jp.jvckenwood.car.openlink",
+        "jp.jvckenwood.remote",
+        "jp.jvckenwood.car.remote",
+        "jp.co.jvckenwood.openlink",
+        "jp.co.jvckenwood.car.openlink",
+        "jp.co.jvckenwood.remote",
+        "jp.co.jvckenwood.remoteapp",
+        "jp.co.jvckenwood.kenwoodremote",
+        "jp.co.jvckenwood.car.remote",
+        "com.kenwood.openlink",
+        "com.kenwood.car.openlink",
+        "com.kenwood.remote",
+        "com.kenwood.remoteapp",
+        "com.kenwood.car.remote",
+        "com.kenwood.link",
+        "com.kenwood.app",
+        "com.kenwood.audio",
+        "com.kenwood.krc",
         "jp.co.kenwood.openlink",
-        "com.jvc.openlink"
+        "jp.co.kenwood.remote",
+        "jp.co.kenwood.car.remote",
+        "jp.co.kenwood.app",
+        "com.jvc.openlink",
+        "com.jvc.remote",
+        "com.jvc.car.remote",
+        "com.jvc.link",
+        "jp.co.jvc.openlink",
+        "jp.co.jvc.remote"
     ]
+
+    private static let supportedEAProtocolsLowercased: Set<String> = Set(
+        supportedEAProtocols.map { $0.lowercased() }
+    )
+
+    static func matchesSupportedProtocol(_ protocolString: String) -> Bool {
+        supportedEAProtocolsLowercased.contains(protocolString.lowercased())
+    }
+
+    static func isKenwoodLikeName(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        let markers = [
+            "kenwood", "jvc", "kmm", "kdc", "dpx", "dmx",
+            "ddx", "dnx", "kw-", "kd-", "xr-", "excelon", "openlink"
+        ]
+        return markers.contains(where: { lower.contains($0) })
+    }
 
     // MARK: - Границы кадра и escape-байты
     static let frameStart: UInt8 = 0x7E

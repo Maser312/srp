@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import ExternalAccessory
 import CoreBluetooth
+import AVFoundation
 
 /// Менеджер подключения и управления автомагнитолой Kenwood по протоколу JVCKENWOOD OpenLink.
 /// Поддерживает два нативных транспорта iOS 15–27:
@@ -11,12 +12,15 @@ import CoreBluetooth
 final class KenwoodRemoteManager: NSObject, ObservableObject {
     // MARK: - Состояние подключения
     @Published private(set) var discoveredDevices: [KenwoodDiscoveredDevice] = []
+    @Published private(set) var nearbyBLEDevices: [KenwoodDiscoveredDevice] = []
     @Published private(set) var isScanning = false
     @Published private(set) var isConnected = false
     @Published private(set) var connectedDeviceName: String?
     @Published private(set) var activeTransportLabel: String?
     @Published private(set) var statusText = "Подключите iPhone к магнитоле Kenwood по Bluetooth или USB"
     @Published private(set) var bluetoothStateText: String?
+    @Published private(set) var connectedBluetoothAudioName: String?
+    @Published private(set) var connectedBluetoothAudioPortType: String?
 
     // MARK: - Живое состояние магнитолы
     @Published var currentSource: KenwoodSource = .btAudio
@@ -71,6 +75,7 @@ final class KenwoodRemoteManager: NSObject, ObservableObject {
     // MARK: - Внутренние транспорты и буферы
     private var eaSession: EASession?
     private var eaAccessories: [String: EAAccessory] = [:]
+    private var eaWriteBuffer = Data()
 
     private var centralManager: CBCentralManager?
     private var blePeripherals: [String: CBPeripheral] = [:]
@@ -107,6 +112,12 @@ final class KenwoodRemoteManager: NSObject, ObservableObject {
             name: .EAAccessoryDidDisconnect,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAudioRouteChanged(_:)),
+            name: AVAudioSession.routeChangeNotification,
+            object: nil
+        )
 
         // Запускаем CoreBluetooth для BLE-устройств
         centralManager = CBCentralManager(delegate: self, queue: .main)
@@ -119,15 +130,64 @@ final class KenwoodRemoteManager: NSObject, ObservableObject {
     }
 
     func refreshDevices() {
+        refreshAudioRoute()
         scanExternalAccessories()
         startBLEScan()
     }
 
-    /// Открывает системный iOS-диалог сопряжения Bluetooth-аксессуара MFi (если магнитола ещё не подключена).
+    /// Пассивно проверяет активный Bluetooth/Car аудио-выход iOS (без прерывания воспроизведения).
+    func refreshAudioRoute() {
+        let outputs = AVAudioSession.sharedInstance().currentRoute.outputs
+        let btOutput = outputs.first { port in
+            port.portType == .bluetoothA2DP
+                || port.portType == .bluetoothHFP
+                || port.portType == .bluetoothLE
+                || port.portType == .carAudio
+        }
+
+        if let port = btOutput {
+            connectedBluetoothAudioName = port.portName
+            switch port.portType {
+            case .bluetoothA2DP: connectedBluetoothAudioPortType = "Bluetooth A2DP"
+            case .bluetoothHFP:  connectedBluetoothAudioPortType = "Bluetooth HFP"
+            case .bluetoothLE:   connectedBluetoothAudioPortType = "Bluetooth LE Audio"
+            case .carAudio:      connectedBluetoothAudioPortType = "Car Audio / USB"
+            default:             connectedBluetoothAudioPortType = "Bluetooth"
+            }
+        } else {
+            connectedBluetoothAudioName = nil
+            connectedBluetoothAudioPortType = nil
+        }
+
+        if !isConnected {
+            if let audioName = connectedBluetoothAudioName, discoveredDevices.isEmpty {
+                statusText = "Подключено аудио \(audioName), ожидание канала OpenLink (iAP2)"
+            } else if discoveredDevices.isEmpty {
+                statusText = "Подключите iPhone к магнитоле Kenwood по Bluetooth или USB"
+            }
+        }
+    }
+
+    /// Открывает системный iOS-диалог сопряжения нового MFi Bluetooth-аксессуара.
     func showSystemBluetoothPicker() {
-        EAAccessoryManager.shared().showBluetoothAccessoryPicker(withNameFilter: nil) { [weak self] _ in
+        EAAccessoryManager.shared().showBluetoothAccessoryPicker(withNameFilter: nil) { [weak self] error in
             Task { @MainActor in
-                self?.refreshDevices()
+                guard let self else { return }
+                if let nsError = error as NSError?,
+                   nsError.domain == EABluetoothAccessoryPickerErrorDomain,
+                   let code = EABluetoothAccessoryPickerError.Code(rawValue: nsError.code) {
+                    switch code {
+                    case .alreadyConnected:
+                        self.statusText = "Магнитола уже сопряжена в Bluetooth iOS — нажмите «Искать»"
+                    case .resultNotFound:
+                        if let audioName = self.connectedBluetoothAudioName {
+                            self.statusText = "\(audioName) уже подключена в Bluetooth. Проверьте REMOTE APP → iOS на магнитоле."
+                        }
+                    default:
+                        break
+                    }
+                }
+                self.refreshDevices()
             }
         }
     }
@@ -143,15 +203,15 @@ final class KenwoodRemoteManager: NSObject, ObservableObject {
                 statusText = "Устройство больше не доступно. Проверьте Bluetooth."
                 return
             }
-            let proto = device.protocolString
-                ?? accessory.protocolStrings.first(where: { KenwoodOpenLink.supportedEAProtocols.contains($0) })
+            let preferredProto = device.protocolString
+                ?? accessory.protocolStrings.first(where: { KenwoodOpenLink.matchesSupportedProtocol($0) })
                 ?? accessory.protocolStrings.first
 
-            guard let protocolString = proto else {
+            guard preferredProto != nil else {
                 statusText = "Магнитола не открыла канал OpenLink"
                 return
             }
-            openEASession(accessory: accessory, protocolString: protocolString)
+            openEASession(accessory: accessory, preferredProtocol: preferredProto)
 
         case .ble:
             guard let peripheral = blePeripherals[device.id], let central = centralManager else {
@@ -651,13 +711,10 @@ final class KenwoodRemoteManager: NSObject, ObservableObject {
     }
 
     private func writeRawData(_ data: Data) {
-        // 1. MFi ExternalAccessory OutputStream
-        if let outStream = eaSession?.outputStream, outStream.hasSpaceAvailable {
-            data.withUnsafeBytes { rawBuf in
-                if let ptr = rawBuf.bindMemory(to: UInt8.self).baseAddress {
-                    _ = outStream.write(ptr, maxLength: data.count)
-                }
-            }
+        // 1. MFi ExternalAccessory OutputStream (с буферизацией до .hasSpaceAvailable)
+        if eaSession != nil {
+            eaWriteBuffer.append(data)
+            flushEAWriteBuffer()
             return
         }
 
@@ -673,6 +730,24 @@ final class KenwoodRemoteManager: NSObject, ObservableObject {
                 let chunk = data.subdata(in: offset..<end)
                 peripheral.writeValue(chunk, for: char, type: writeType)
                 offset = end
+            }
+        }
+    }
+
+    private func flushEAWriteBuffer() {
+        guard let outStream = eaSession?.outputStream,
+              outStream.hasSpaceAvailable,
+              !eaWriteBuffer.isEmpty else { return }
+
+        while outStream.hasSpaceAvailable && !eaWriteBuffer.isEmpty {
+            let written: Int = eaWriteBuffer.withUnsafeBytes { rawBuf in
+                guard let ptr = rawBuf.bindMemory(to: UInt8.self).baseAddress else { return 0 }
+                return outStream.write(ptr, maxLength: eaWriteBuffer.count)
+            }
+            if written > 0 {
+                eaWriteBuffer.removeFirst(written)
+            } else {
+                break
             }
         }
     }
@@ -777,33 +852,45 @@ final class KenwoodRemoteManager: NSObject, ObservableObject {
 
     private func scanExternalAccessories() {
         eaAccessories.removeAll()
+        discoveredDevices.removeAll { $0.transport == .mfiBluetooth }
+
+        // iOS уже отфильтровала connectedAccessories по UISupportedExternalAccessoryProtocols из Info.plist,
+        // поэтому принимаем каждый возвращённый MFi-аксессуар без жёсткой фильтрации по имени.
         let connected = EAAccessoryManager.shared().connectedAccessories
         for acc in connected {
-            let matchingProto = acc.protocolStrings.first(where: { KenwoodOpenLink.supportedEAProtocols.contains($0) })
-            let nameLower = "\(acc.name) \(acc.manufacturer)".lowercased()
-            let isKenwoodBrand = nameLower.contains("kenwood") || nameLower.contains("jvc") || nameLower.contains("kmm") || nameLower.contains("kdc") || nameLower.contains("dpx") || nameLower.contains("dmx") || nameLower.contains("ddx") || nameLower.contains("dnx")
+            let matchingProto = acc.protocolStrings.first(where: { KenwoodOpenLink.matchesSupportedProtocol($0) })
+                ?? acc.protocolStrings.first
+            guard let proto = matchingProto else { continue }
 
-            guard matchingProto != nil || isKenwoodBrand else { continue }
             let id = "ea-\(acc.connectionID)"
             eaAccessories[id] = acc
 
+            let displayName: String = {
+                let trimmed = acc.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty { return trimmed }
+                let model = acc.modelNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+                return model.isEmpty ? "KENWOOD Receiver" : model
+            }()
+
+            let detailText = acc.modelNumber.isEmpty ? proto : "\(acc.modelNumber) · \(proto)"
             let item = KenwoodDiscoveredDevice(
                 id: id,
-                name: acc.name.isEmpty ? "KENWOOD Receiver" : acc.name,
+                name: displayName,
                 transport: .mfiBluetooth,
-                detail: acc.modelNumber.isEmpty ? "MFi OpenLink" : acc.modelNumber,
-                protocolString: matchingProto ?? acc.protocolStrings.first
+                detail: detailText,
+                protocolString: proto
             )
             upsertDiscovered(item)
 
             // Автоподключение, если ещё не подключены
-            if !isConnected, let proto = matchingProto {
-                openEASession(accessory: acc, protocolString: proto)
+            if !isConnected {
+                openEASession(accessory: acc, preferredProtocol: proto)
             }
         }
     }
 
     @objc private func handleEAAccessoryConnected(_ notification: Notification) {
+        refreshAudioRoute()
         scanExternalAccessories()
     }
 
@@ -812,12 +899,37 @@ final class KenwoodRemoteManager: NSObject, ObservableObject {
            eaSession?.accessory?.connectionID == acc.connectionID {
             disconnect()
         }
+        refreshAudioRoute()
         scanExternalAccessories()
     }
 
-    private func openEASession(accessory: EAAccessory, protocolString: String) {
+    @objc private func handleAudioRouteChanged(_ notification: Notification) {
+        refreshAudioRoute()
+        scanExternalAccessories()
+    }
+
+    private func openEASession(accessory: EAAccessory, preferredProtocol: String?) {
         closeEASession()
-        guard let session = EASession(accessory: accessory, forProtocol: protocolString) else {
+
+        var candidates: [String] = []
+        if let preferredProtocol {
+            candidates.append(preferredProtocol)
+        }
+        for proto in accessory.protocolStrings where !candidates.contains(proto) {
+            candidates.append(proto)
+        }
+
+        var openedSession: EASession?
+        var activeProto: String?
+        for proto in candidates {
+            if let session = EASession(accessory: accessory, forProtocol: proto) {
+                openedSession = session
+                activeProto = proto
+                break
+            }
+        }
+
+        guard let session = openedSession else {
             statusText = "Не удалось открыть MFi-сессию с \(accessory.name)"
             return
         }
@@ -833,12 +945,14 @@ final class KenwoodRemoteManager: NSObject, ObservableObject {
 
         isConnected = true
         connectedDeviceName = accessory.name.isEmpty ? "KENWOOD" : accessory.name
-        activeTransportLabel = "MFi Bluetooth / USB"
+        activeTransportLabel = activeProto ?? "MFi Bluetooth / USB"
         statusText = "Подключено к \(connectedDeviceName ?? "KENWOOD")"
         performOpenLinkHandshake()
     }
 
     private func closeEASession() {
+        eaWriteBuffer.removeAll(keepingCapacity: false)
+
         eaSession?.inputStream?.close()
         eaSession?.inputStream?.remove(from: .main, forMode: .common)
         eaSession?.inputStream?.delegate = nil
@@ -850,10 +964,43 @@ final class KenwoodRemoteManager: NSObject, ObservableObject {
         eaSession = nil
     }
 
-    // MARK: - CoreBluetooth BLE Scan
+    // MARK: - CoreBluetooth BLE Scan + Already-Connected Peripherals
 
     private func startBLEScan() {
         guard let central = centralManager, central.state == .poweredOn else { return }
+        nearbyBLEDevices.removeAll()
+
+        // 1. Проверяем уже подключённые в iOS BLE-устройства (они часто перестают рекламироваться)
+        let probeServiceUUIDs: [CBUUID] = [
+            CBUUID(string: KenwoodOpenLink.openLinkServiceUUID),
+            CBUUID(string: KenwoodOpenLink.tccServiceUUID),
+            CBUUID(string: KenwoodOpenLink.altServiceUUID),
+            CBUUID(string: "FFF0"),
+            CBUUID(string: "FFE0"),
+            CBUUID(string: "180A"),
+            CBUUID(string: "1800")
+        ]
+        let connectedPeripherals = central.retrieveConnectedPeripherals(withServices: probeServiceUUIDs)
+        for peripheral in connectedPeripherals {
+            let name = (peripheral.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let id = "ble-\(peripheral.identifier.uuidString)"
+            blePeripherals[id] = peripheral
+            let displayName = name.isEmpty ? "BLE-устройство" : name
+            let device = KenwoodDiscoveredDevice(
+                id: id,
+                name: displayName,
+                transport: .ble,
+                detail: "Уже подключено в iOS",
+                protocolString: nil
+            )
+            if KenwoodOpenLink.isKenwoodLikeName(displayName) {
+                upsertDiscovered(device)
+            } else if !name.isEmpty {
+                upsertNearbyBLE(device)
+            }
+        }
+
+        // 2. Активный поиск всех BLE-устройств рядом
         isScanning = true
         central.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
         DispatchQueue.main.asyncAfter(deadline: .now() + 8.0) { [weak self] in
@@ -868,6 +1015,15 @@ final class KenwoodRemoteManager: NSObject, ObservableObject {
             discoveredDevices.append(device)
         }
     }
+
+    private func upsertNearbyBLE(_ device: KenwoodDiscoveredDevice) {
+        if discoveredDevices.contains(where: { $0.id == device.id }) { return }
+        if let idx = nearbyBLEDevices.firstIndex(where: { $0.id == device.id }) {
+            nearbyBLEDevices[idx] = device
+        } else {
+            nearbyBLEDevices.append(device)
+        }
+    }
 }
 
 // MARK: - StreamDelegate (ExternalAccessory Input/Output)
@@ -877,6 +1033,14 @@ extension KenwoodRemoteManager: StreamDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
             switch eventCode {
+            case .openCompleted:
+                if aStream === self.eaSession?.outputStream {
+                    self.flushEAWriteBuffer()
+                }
+            case .hasSpaceAvailable:
+                if aStream === self.eaSession?.outputStream {
+                    self.flushEAWriteBuffer()
+                }
             case .hasBytesAvailable:
                 guard let input = aStream as? InputStream else { return }
                 var buffer = [UInt8](repeating: 0, count: 1024)
@@ -925,42 +1089,54 @@ extension KenwoodRemoteManager: CBCentralManagerDelegate, CBPeripheralDelegate {
         advertisementData: [String: Any],
         rssi RSSI: NSNumber
     ) {
-        let advName = (advertisementData[CBAdvertisementDataLocalNameKey] as? String) ?? peripheral.name ?? ""
-        let serviceUUIDs = (advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID]) ?? []
-        let hasKenwoodUUID = serviceUUIDs.contains { uuid in
+        let advName = ((advertisementData[CBAdvertisementDataLocalNameKey] as? String) ?? peripheral.name ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let primaryUUIDs = (advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID]) ?? []
+        let overflowUUIDs = (advertisementData[CBAdvertisementDataOverflowServiceUUIDsKey] as? [CBUUID]) ?? []
+        let solicitedUUIDs = (advertisementData[CBAdvertisementDataSolicitedServiceUUIDsKey] as? [CBUUID]) ?? []
+        let allUUIDs = primaryUUIDs + overflowUUIDs + solicitedUUIDs
+
+        let hasKenwoodUUID = allUUIDs.contains { uuid in
             let s = uuid.uuidString.uppercased()
             return s == KenwoodOpenLink.openLinkServiceUUID
                 || s == KenwoodOpenLink.tccServiceUUID
                 || s == KenwoodOpenLink.altServiceUUID
         }
 
-        let lower = advName.lowercased()
-        let matchesName = lower.contains("kenwood")
-            || lower.contains("kmm")
-            || lower.contains("kdc")
-            || lower.contains("dpx")
-            || lower.contains("dmx")
-            || lower.contains("ddx")
-            || lower.contains("dnx")
-            || lower.contains("jvc")
-            || lower.contains("openlink")
-
-        guard hasKenwoodUUID || matchesName else { return }
+        let matchesName = KenwoodOpenLink.isKenwoodLikeName(advName)
         let id = "ble-\(peripheral.identifier.uuidString)"
-        let displayName = advName.isEmpty ? "KENWOOD BLE" : advName
+        let rssiValue = RSSI.intValue
+        let rssiText = rssiValue == 127 ? "BLE" : "RSSI \(rssiValue) dBm"
 
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            self.blePeripherals[id] = peripheral
-            self.upsertDiscovered(
-                KenwoodDiscoveredDevice(
-                    id: id,
-                    name: displayName,
-                    transport: .ble,
-                    detail: "RSSI \(RSSI.intValue) dBm",
-                    protocolString: nil
+        if hasKenwoodUUID || matchesName {
+            let displayName = advName.isEmpty ? "KENWOOD BLE" : advName
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.blePeripherals[id] = peripheral
+                self.upsertDiscovered(
+                    KenwoodDiscoveredDevice(
+                        id: id,
+                        name: displayName,
+                        transport: .ble,
+                        detail: rssiText,
+                        protocolString: nil
+                    )
                 )
-            )
+            }
+        } else if !advName.isEmpty {
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.blePeripherals[id] = peripheral
+                self.upsertNearbyBLE(
+                    KenwoodDiscoveredDevice(
+                        id: id,
+                        name: advName,
+                        transport: .ble,
+                        detail: rssiText,
+                        protocolString: nil
+                    )
+                )
+            }
         }
     }
 
