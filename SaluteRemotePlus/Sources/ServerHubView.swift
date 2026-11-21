@@ -1027,209 +1027,255 @@ struct ServerEditorSheet: View {
     var body: some View {
         ZStack {
             ServerLiquidBackdrop()
-
             VStack(spacing: 0) {
                 Capsule()
                     .fill(Color.white.opacity(0.24))
                     .frame(width: 40, height: 4)
                     .padding(.top, 10)
 
-                HStack {
-                    Button("Отмена") { dismiss() }
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.70))
-
-                    Spacer()
-
-                    Text(existing == nil ? "Новый сервер" : "Настройки сервера")
-                        .font(.headline.weight(.bold))
-                        .foregroundStyle(.white)
-
-                    Spacer()
-
-                    Button("Сохранить") { save() }
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(ServerPalette.iruCyan)
-                }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 14)
+                editorHeader
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 14) {
-                        // Выбор типа сервера
-                        VStack(alignment: .leading, spacing: 8) {
-                            sectionTitle("Тип панели управления")
-                            HStack(spacing: 8) {
-                                ForEach(ServerVendor.allCases) { item in
-                                    Button {
-                                        Haptics.light()
-                                        let wasDefaultUser = username.isEmpty || username == vendor.defaultUsername
-                                        vendor = item
-                                        if wasDefaultUser {
-                                            username = item.defaultUsername
-                                        }
-                                    } label: {
-                                        VStack(spacing: 5) {
-                                            Image(systemName: item.symbol)
-                                                .font(.system(size: 16, weight: .bold))
-                                            Text(item.shortBadge)
-                                                .font(.system(size: 10, weight: .bold))
-                                                .lineLimit(1)
-                                        }
-                                        .foregroundStyle(vendor == item ? Color.white : Color.white.opacity(0.65))
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 10)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                                .fill(vendor == item ? item.accentColor.opacity(0.45) : Color.white.opacity(0.06))
-                                                .overlay(
-                                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                                        .strokeBorder(
-                                                            vendor == item ? item.accentColor : Color.white.opacity(0.12),
-                                                            lineWidth: vendor == item ? 1.4 : 1
-                                                        )
-                                                )
-                                        )
-                                    }
-                                    .buttonStyle(RemotePressStyle())
-                                }
-                            }
-                        }
-                        .padding(14)
-                        .background(ServerGlassPanel(cornerRadius: 20))
-
-                        // Основные поля
-                        VStack(alignment: .leading, spacing: 12) {
-                            sectionTitle("Подключение и учётные данные")
-
-                            editorField(label: "Название", placeholder: vendor == .dellIDRAC ? "Dell PowerEdge R740" : (vendor == .iruBMC ? "iRU Rock S2108" : "Основной сервер"), text: $name)
-                            editorField(label: "Адрес (IP или URL)", placeholder: vendor.addressPlaceholder, text: $address, keyboard: .URL, disableAutocap: true)
-                            editorField(label: "Логин", placeholder: vendor.defaultUsername, text: $username, disableAutocap: true)
-
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text("Пароль (сохраняется в iOS Keychain)")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.white.opacity(0.68))
-                                HStack(spacing: 8) {
-                                    Group {
-                                        if showPassword {
-                                            TextField("Введите пароль", text: $password)
-                                                .autocapitalization(.none)
-                                                .disableAutocorrection(true)
-                                        } else {
-                                            SecureField("Введите пароль", text: $password)
-                                                .autocapitalization(.none)
-                                                .disableAutocorrection(true)
-                                        }
-                                    }
-                                    .font(.subheadline)
-                                    .foregroundStyle(.white)
-
-                                    Button {
-                                        showPassword.toggle()
-                                    } label: {
-                                        Image(systemName: showPassword ? "eye.slash.fill" : "eye.fill")
-                                            .font(.subheadline)
-                                            .foregroundStyle(.white.opacity(0.65))
-                                    }
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 11)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(Color.black.opacity(0.32))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                                .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
-                                        )
-                                )
-                            }
-
-                            editorField(label: "MAC-адрес для Wake-on-LAN (необязательно)", placeholder: "AA:BB:CC:DD:EE:FF", text: $macAddress, disableAutocap: true)
-                            editorField(label: "Заметка (стойка, роль, порт)", placeholder: "Стойка 1 · Виртуализация", text: $notes)
-                        }
-                        .padding(14)
-                        .background(ServerGlassPanel(cornerRadius: 20))
-
-                        // Параметры совместимости Dell iDRAC / iRU BMC
-                        VStack(alignment: .leading, spacing: 10) {
-                            sectionTitle("Параметры веб-панели и BMC")
-
-                            toggleRow(
-                                title: "Доверять самоподписанному SSL",
-                                subtitle: "Нужно для локальных сертификатов Dell iDRAC и iRU BMC",
-                                isOn: $allowUntrustedSSL
-                            )
-                            Divider().background(Color.white.opacity(0.10))
-                            toggleRow(
-                                title: "Десктопный режим (Desktop UA)",
-                                subtitle: "Предотвращает поломку вёрстки iDRAC / MegaRAC на iPhone",
-                                isOn: $desktopMode
-                            )
-                            Divider().background(Color.white.opacity(0.10))
-                            toggleRow(
-                                title: "Автозаполнение логина и пароля",
-                                subtitle: "Автоматически подставляет данные из Keychain на странице входа",
-                                isOn: $autoFillLogin
-                            )
-                            Divider().background(Color.white.opacity(0.10))
-                            toggleRow(
-                                title: "Опрос Redfish API (питание, °C, статус)",
-                                subtitle: "Показывает состояние железа прямо на карточке сервера",
-                                isOn: $redfishEnabled
-                            )
-                        }
-                        .padding(14)
-                        .background(ServerGlassPanel(cornerRadius: 20))
-
-                        if let err = validationError {
-                            Text(err)
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(ServerPalette.dangerRed)
-                                .padding(.horizontal, 6)
-                        }
-
-                        Button(action: save) {
-                            Text(existing == nil ? "Добавить сервер" : "Сохранить изменения")
-                                .font(.headline.weight(.bold))
-                                .foregroundStyle(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .fill(ServerPalette.accentButtonGradient)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                                .strokeBorder(ServerPalette.glassAccentBorder, lineWidth: 1)
-                                        )
-                                )
-                        }
-                        .buttonStyle(RemotePressStyle())
-                        .padding(.bottom, 24)
-                    }
-                    .padding(.horizontal, 16)
+                    editorForm
                 }
             }
         }
         .preferredColorScheme(.dark)
-        .onAppear {
-            if let profile = existing {
-                name = profile.name
-                vendor = profile.vendor
-                address = profile.address
-                username = profile.username
-                password = manager.password(for: profile)
-                macAddress = profile.macAddress
-                notes = profile.notes
-                allowUntrustedSSL = profile.allowUntrustedSSL
-                desktopMode = profile.desktopMode
-                autoFillLogin = profile.autoFillLogin
-                redfishEnabled = profile.redfishEnabled
-            } else {
-                vendor = defaultVendor
-                username = defaultVendor.defaultUsername
-                redfishEnabled = (defaultVendor != .genericWeb)
+        .onAppear(perform: loadExistingProfile)
+    }
+
+    private var editorHeader: some View {
+        HStack {
+            Button("Отмена") { dismiss() }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.70))
+
+            Spacer()
+
+            Text(existing == nil ? "Новый сервер" : "Настройки сервера")
+                .font(.headline.weight(.bold))
+                .foregroundStyle(.white)
+
+            Spacer()
+
+            Button("Сохранить") { save() }
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(ServerPalette.iruCyan)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+    }
+
+    private var editorForm: some View {
+        VStack(spacing: 14) {
+            vendorSection
+            connectionSection
+            compatibilitySection
+
+            if let err = validationError {
+                Text(err)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ServerPalette.dangerRed)
+                    .padding(.horizontal, 6)
             }
+
+            saveButton
+        }
+        .padding(.horizontal, 16)
+    }
+
+    private var vendorSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionTitle("Тип панели управления")
+            HStack(spacing: 8) {
+                ForEach(ServerVendor.allCases) { item in
+                    Button {
+                        Haptics.light()
+                        let wasDefaultUser = username.isEmpty || username == vendor.defaultUsername
+                        vendor = item
+                        if wasDefaultUser {
+                            username = item.defaultUsername
+                        }
+                    } label: {
+                        VStack(spacing: 5) {
+                            Image(systemName: item.symbol)
+                                .font(.system(size: 16, weight: .bold))
+                            Text(item.shortBadge)
+                                .font(.system(size: 10, weight: .bold))
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(vendor == item ? Color.white : Color.white.opacity(0.65))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(vendor == item ? item.accentColor.opacity(0.45) : Color.white.opacity(0.06))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .strokeBorder(
+                                            vendor == item ? item.accentColor : Color.white.opacity(0.12),
+                                            lineWidth: vendor == item ? 1.4 : 1
+                                        )
+                                )
+                        )
+                    }
+                    .buttonStyle(RemotePressStyle())
+                }
+            }
+        }
+        .padding(14)
+        .background(ServerGlassPanel(cornerRadius: 20))
+    }
+
+    private var connectionSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionTitle("Подключение и учётные данные")
+            editorField(
+                label: "Название",
+                placeholder: vendor == .dellIDRAC ? "Dell PowerEdge R740" : (vendor == .iruBMC ? "iRU Rock S2108" : "Основной сервер"),
+                text: $name
+            )
+            editorField(
+                label: "Адрес (IP или URL)",
+                placeholder: vendor.addressPlaceholder,
+                text: $address,
+                keyboard: .URL,
+                disableAutocap: true
+            )
+            editorField(
+                label: "Логин",
+                placeholder: vendor.defaultUsername,
+                text: $username,
+                disableAutocap: true
+            )
+            passwordEditor
+            editorField(
+                label: "MAC-адрес для Wake-on-LAN (необязательно)",
+                placeholder: "AA:BB:CC:DD:EE:FF",
+                text: $macAddress,
+                disableAutocap: true
+            )
+            editorField(
+                label: "Заметка (стойка, роль, порт)",
+                placeholder: "Стойка 1 · Виртуализация",
+                text: $notes
+            )
+        }
+        .padding(14)
+        .background(ServerGlassPanel(cornerRadius: 20))
+    }
+
+    private var passwordEditor: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("Пароль (сохраняется в iOS Keychain)")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.68))
+
+            HStack(spacing: 8) {
+                Group {
+                    if showPassword {
+                        TextField("Введите пароль", text: $password)
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                    } else {
+                        SecureField("Введите пароль", text: $password)
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                    }
+                }
+                .font(.subheadline)
+                .foregroundStyle(.white)
+
+                Button {
+                    showPassword.toggle()
+                } label: {
+                    Image(systemName: showPassword ? "eye.slash.fill" : "eye.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.65))
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 11)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.black.opacity(0.32))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
+                    )
+            )
+        }
+    }
+
+    private var compatibilitySection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionTitle("Параметры веб-панели и BMC")
+
+            toggleRow(
+                title: "Доверять самоподписанному SSL",
+                subtitle: "Нужно для локальных сертификатов Dell iDRAC и iRU BMC",
+                isOn: $allowUntrustedSSL
+            )
+            Divider().background(Color.white.opacity(0.10))
+            toggleRow(
+                title: "Десктопный режим (Desktop UA)",
+                subtitle: "Предотвращает поломку вёрстки iDRAC / MegaRAC на iPhone",
+                isOn: $desktopMode
+            )
+            Divider().background(Color.white.opacity(0.10))
+            toggleRow(
+                title: "Автозаполнение логина и пароля",
+                subtitle: "Автоматически подставляет данные из Keychain на странице входа",
+                isOn: $autoFillLogin
+            )
+            Divider().background(Color.white.opacity(0.10))
+            toggleRow(
+                title: "Опрос Redfish API (питание, °C, статус)",
+                subtitle: "Показывает состояние железа прямо на карточке сервера",
+                isOn: $redfishEnabled
+            )
+        }
+        .padding(14)
+        .background(ServerGlassPanel(cornerRadius: 20))
+    }
+
+    private var saveButton: some View {
+        Button(action: save) {
+            Text(existing == nil ? "Добавить сервер" : "Сохранить изменения")
+                .font(.headline.weight(.bold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(ServerPalette.accentButtonGradient)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .strokeBorder(ServerPalette.glassAccentBorder, lineWidth: 1)
+                        )
+                )
+        }
+        .buttonStyle(RemotePressStyle())
+        .padding(.bottom, 24)
+    }
+
+    private func loadExistingProfile() {
+        if let profile = existing {
+            name = profile.name
+            vendor = profile.vendor
+            address = profile.address
+            username = profile.username
+            password = manager.password(for: profile)
+            macAddress = profile.macAddress
+            notes = profile.notes
+            allowUntrustedSSL = profile.allowUntrustedSSL
+            desktopMode = profile.desktopMode
+            autoFillLogin = profile.autoFillLogin
+            redfishEnabled = profile.redfishEnabled
+        } else {
+            vendor = defaultVendor
+            username = defaultVendor.defaultUsername
+            redfishEnabled = (defaultVendor != .genericWeb)
         }
     }
 
