@@ -55,11 +55,19 @@ enum AppSection {
     case home
     case sberRemote
     case kenwood
+    case servers
+}
+
+private enum SuperAppCardTheme {
+    case sber
+    case kenwood
+    case server
 }
 
 struct ContentView: View {
     @StateObject private var remote = SberCastRemote()
     @StateObject private var kenwood = KenwoodRemoteManager()
+    @StateObject private var serverManager = ServerManager()
     @Environment(\.scenePhase) private var scenePhase
     @State private var section: AppSection = .home
 
@@ -72,6 +80,7 @@ struct ContentView: View {
                 SuperAppHomeView(
                     remote: remote,
                     kenwood: kenwood,
+                    serverManager: serverManager,
                     onOpenSber: {
                         Haptics.medium()
                         withAnimation(.easeInOut(duration: 0.22)) {
@@ -82,6 +91,12 @@ struct ContentView: View {
                         Haptics.medium()
                         withAnimation(.easeInOut(duration: 0.22)) {
                             section = .kenwood
+                        }
+                    },
+                    onOpenServers: {
+                        Haptics.medium()
+                        withAnimation(.easeInOut(duration: 0.22)) {
+                            section = .servers
                         }
                     }
                 )
@@ -112,6 +127,14 @@ struct ContentView: View {
                     }
                 }
                 .transition(.opacity)
+
+            case .servers:
+                ServerHubView(manager: serverManager) {
+                    withAnimation(.easeInOut(duration: 0.22)) {
+                        section = .home
+                    }
+                }
+                .transition(.opacity)
             }
         }
         .preferredColorScheme(.dark)
@@ -124,13 +147,16 @@ struct ContentView: View {
         .onAppear {
             remote.resume()
             kenwood.start()
+            serverManager.startMonitoring()
         }
         .onChange(of: scenePhase) { phase in
             switch phase {
             case .active:
                 remote.resume()
+                serverManager.refreshNetworkRoute()
             case .background:
                 remote.pause()
+                serverManager.lockIfRequired()
             default:
                 break
             }
@@ -138,13 +164,15 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Главное первое меню супераппа (Пульт Сбер / Магнитола Kenwood)
+// MARK: - Главное первое меню супераппа (Пульт Сбер / Магнитола Kenwood / Серверы Dell и iRU)
 
 struct SuperAppHomeView: View {
     @ObservedObject var remote: SberCastRemote
     @ObservedObject var kenwood: KenwoodRemoteManager
+    @ObservedObject var serverManager: ServerManager
     let onOpenSber: () -> Void
     let onOpenKenwood: () -> Void
+    let onOpenServers: () -> Void
 
     private var sberSubtitle: String {
         if let dev = remote.connectedDevice {
@@ -170,57 +198,94 @@ struct SuperAppHomeView: View {
         return "Плеер · 13-band EQ · DSP · DTA · Подсветка"
     }
 
-    var body: some View {
-        VStack(spacing: 24) {
-            Spacer(minLength: 18)
+    private var serversSubtitle: String {
+        let count = serverManager.servers.count
+        if count > 0 {
+            let online = serverManager.onlineCount
+            if online > 0 {
+                return "Онлайн: \(online) из \(count) · \(serverManager.networkRoute.shortBadge)"
+            }
+            return "Серверов: \(count) · \(serverManager.networkRoute.title)"
+        }
+        return "Панели Dell iDRAC и iRU BMC · LAN / Kerio VPN"
+    }
 
-            // Заголовок супераппа
-            VStack(spacing: 10) {
-                ZStack {
-                    LiquidGlassCircle(highlighted: false, accent: true)
-                        .frame(width: 84, height: 84)
-                    Image(systemName: "dot.radiowaves.left.and.right")
-                        .font(.system(size: 35, weight: .bold))
-                        .foregroundStyle(.white)
+    private var serversBadgeText: String? {
+        switch serverManager.networkRoute {
+        case .vpnAndWiFi, .vpnOnly:
+            return "VPN"
+        case .localWiFi:
+            return serverManager.onlineCount > 0 ? "Онлайн \(serverManager.onlineCount)" : "LAN"
+        default:
+            return nil
+        }
+    }
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 22) {
+                Spacer(minLength: 14)
+
+                // Заголовок супераппа
+                VStack(spacing: 10) {
+                    ZStack {
+                        LiquidGlassCircle(highlighted: false, accent: true)
+                            .frame(width: 80, height: 80)
+                        Image(systemName: "dot.radiowaves.left.and.right")
+                            .font(.system(size: 33, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+
+                    Text("Salute Remote+")
+                        .font(.system(size: 29, weight: .bold, design: .rounded))
+                        .foregroundStyle(SberPalette.brandGradient)
+
+                    Text("Выберите раздел управления")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.60))
                 }
 
-                Text("Salute Remote+")
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
-                    .foregroundStyle(SberPalette.brandGradient)
+                // Основные кнопки главного меню: Пульт Сбер + Магнитола Kenwood + Серверы Dell / iRU
+                VStack(spacing: 14) {
+                    SuperAppMenuCard(
+                        symbol: "tv.fill",
+                        title: "Пульт Сбер",
+                        subtitle: sberSubtitle,
+                        badgeText: sberReady ? "Готов" : nil,
+                        badgeActive: sberReady,
+                        accentIcon: true,
+                        theme: .sber,
+                        action: onOpenSber
+                    )
 
-                Text("Выберите устройство управления")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.60))
+                    SuperAppMenuCard(
+                        symbol: "car.fill",
+                        title: "Магнитола KENWOOD",
+                        subtitle: kenwoodSubtitle,
+                        badgeText: kenwood.isConnected ? "Подключено" : nil,
+                        badgeActive: kenwood.isConnected,
+                        accentIcon: true,
+                        theme: .kenwood,
+                        action: onOpenKenwood
+                    )
+
+                    SuperAppMenuCard(
+                        symbol: "server.rack",
+                        title: "Серверы Dell / iRU",
+                        subtitle: serversSubtitle,
+                        badgeText: serversBadgeText,
+                        badgeActive: serverManager.networkRoute.isReadyForLAN,
+                        accentIcon: true,
+                        theme: .server,
+                        action: onOpenServers
+                    )
+                }
+
+                Spacer(minLength: 24)
             }
-
-            // Основные кнопки главного меню: Пульт Сбер + Магнитола Kenwood
-            VStack(spacing: 16) {
-                SuperAppMenuCard(
-                    symbol: "tv.fill",
-                    title: "Пульт Сбер",
-                    subtitle: sberSubtitle,
-                    badgeText: sberReady ? "Готов" : nil,
-                    badgeActive: sberReady,
-                    accentIcon: true,
-                    action: onOpenSber
-                )
-
-                SuperAppMenuCard(
-                    symbol: "car.fill",
-                    title: "Магнитола KENWOOD",
-                    subtitle: kenwoodSubtitle,
-                    badgeText: kenwood.isConnected ? "Подключено" : nil,
-                    badgeActive: kenwood.isConnected,
-                    accentIcon: true,
-                    kenwoodStyle: true,
-                    action: onOpenKenwood
-                )
-            }
-
-            Spacer(minLength: 28)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
     }
 }
 
@@ -231,8 +296,32 @@ private struct SuperAppMenuCard: View {
     let badgeText: String?
     let badgeActive: Bool
     let accentIcon: Bool
-    var kenwoodStyle: Bool = false
+    var theme: SuperAppCardTheme = .sber
     let action: () -> Void
+
+    private var iconGradient: LinearGradient {
+        switch theme {
+        case .sber: return SberPalette.accentButtonGradient
+        case .kenwood: return KenwoodPalette.accentButtonGradient
+        case .server: return ServerPalette.accentButtonGradient
+        }
+    }
+
+    private var accentBorder: LinearGradient {
+        switch theme {
+        case .sber: return SberPalette.glassAccentBorder
+        case .kenwood: return KenwoodPalette.glassAccentBorder
+        case .server: return ServerPalette.glassAccentBorder
+        }
+    }
+
+    private var glowColor: Color {
+        switch theme {
+        case .sber: return SberPalette.brightGreen
+        case .kenwood: return KenwoodPalette.crimson
+        case .server: return ServerPalette.dellBlue
+        }
+    }
 
     var body: some View {
         Button(action: action) {
@@ -240,11 +329,11 @@ private struct SuperAppMenuCard: View {
                 ZStack {
                     if accentIcon {
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(kenwoodStyle ? KenwoodPalette.accentButtonGradient : SberPalette.accentButtonGradient)
-                            .opacity(0.90)
+                            .fill(iconGradient)
+                            .opacity(0.92)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .strokeBorder(kenwoodStyle ? KenwoodPalette.glassAccentBorder : SberPalette.glassAccentBorder, lineWidth: 1)
+                                    .strokeBorder(accentBorder, lineWidth: 1)
                             )
                     } else {
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -259,7 +348,7 @@ private struct SuperAppMenuCard: View {
                         .foregroundStyle(accentIcon ? .white : .white.opacity(0.65))
                 }
                 .frame(width: 54, height: 54)
-                .shadow(color: accentIcon ? (kenwoodStyle ? KenwoodPalette.crimson : SberPalette.brightGreen).opacity(0.32) : .clear, radius: 8, y: 3)
+                .shadow(color: accentIcon ? glowColor.opacity(0.34) : .clear, radius: 8, y: 3)
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
@@ -270,14 +359,14 @@ private struct SuperAppMenuCard: View {
                         if let badgeText {
                             Text(badgeText)
                                 .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(badgeActive ? (kenwoodStyle ? .white : SberPalette.bgTop) : .white.opacity(0.75))
+                                .foregroundStyle(badgeActive ? (theme == .sber ? SberPalette.bgTop : .white) : .white.opacity(0.75))
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
                                 .background(
                                     Capsule()
                                         .fill(
                                             badgeActive
-                                                ? AnyShapeStyle(kenwoodStyle ? KenwoodPalette.accentButtonGradient : SberPalette.brandGradient)
+                                                ? AnyShapeStyle(theme == .sber ? SberPalette.brandGradient : iconGradient)
                                                 : AnyShapeStyle(Color.white.opacity(0.12))
                                         )
                                 )
@@ -300,10 +389,13 @@ private struct SuperAppMenuCard: View {
             .padding(16)
             .background(
                 Group {
-                    if kenwoodStyle {
-                        KenwoodGlassPanel(cornerRadius: 24)
-                    } else {
+                    switch theme {
+                    case .sber:
                         LiquidGlassPanel(cornerRadius: 24)
+                    case .kenwood:
+                        KenwoodGlassPanel(cornerRadius: 24)
+                    case .server:
+                        ServerGlassPanel(cornerRadius: 24, accentGlow: ServerPalette.dellBlue)
                     }
                 }
             )
