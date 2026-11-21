@@ -83,18 +83,21 @@ struct ContentView: View {
                     serverManager: serverManager,
                     onOpenSber: {
                         Haptics.medium()
+                        remote.resume()
                         withAnimation(.easeInOut(duration: 0.22)) {
                             section = .sberRemote
                         }
                     },
                     onOpenKenwood: {
                         Haptics.medium()
+                        kenwood.start()
                         withAnimation(.easeInOut(duration: 0.22)) {
                             section = .kenwood
                         }
                     },
                     onOpenServers: {
                         Haptics.medium()
+                        serverManager.startMonitoring()
                         withAnimation(.easeInOut(duration: 0.22)) {
                             section = .servers
                         }
@@ -106,12 +109,14 @@ struct ContentView: View {
                 Group {
                     if remote.connectedDevice != nil {
                         RemotePadView(remote: remote) {
+                            remote.pause()
                             withAnimation(.easeInOut(duration: 0.22)) {
                                 section = .home
                             }
                         }
                     } else {
                         ConnectionView(remote: remote) {
+                            remote.pause()
                             withAnimation(.easeInOut(duration: 0.22)) {
                                 section = .home
                             }
@@ -122,6 +127,7 @@ struct ContentView: View {
 
             case .kenwood:
                 KenwoodRemoteView(kenwood: kenwood) {
+                    kenwood.stopScanning()
                     withAnimation(.easeInOut(duration: 0.22)) {
                         section = .home
                     }
@@ -130,6 +136,7 @@ struct ContentView: View {
 
             case .servers:
                 ServerHubView(manager: serverManager) {
+                    serverManager.stopNetworkScan()
                     withAnimation(.easeInOut(duration: 0.22)) {
                         section = .home
                     }
@@ -144,18 +151,19 @@ struct ContentView: View {
         )) {
             PinSheet(remote: remote)
         }
-        .onAppear {
-            remote.resume()
-            kenwood.start()
-            serverManager.startMonitoring()
-        }
         .onChange(of: scenePhase) { phase in
             switch phase {
             case .active:
-                remote.resume()
-                serverManager.refreshNetworkRoute()
+                if section == .sberRemote {
+                    remote.resume()
+                } else if section == .servers {
+                    serverManager.refreshNetworkRoute()
+                }
             case .background:
-                remote.pause()
+                if section == .sberRemote {
+                    remote.pause()
+                }
+                serverManager.stopNetworkScan()
                 serverManager.lockIfRequired()
             default:
                 break
@@ -205,12 +213,18 @@ struct SuperAppHomeView: View {
             if online > 0 {
                 return "Онлайн: \(online) из \(count) · \(serverManager.networkRoute.shortBadge)"
             }
-            return "Серверов: \(count) · \(serverManager.networkRoute.title)"
+            if serverManager.isMonitoring {
+                return "Серверов: \(count) · \(serverManager.networkRoute.title)"
+            }
+            return "Сохранённых серверов: \(count) · Dell iDRAC / iRU BMC"
         }
         return "Панели Dell iDRAC и iRU BMC · LAN / Kerio VPN"
     }
 
     private var serversBadgeText: String? {
+        guard serverManager.isMonitoring else {
+            return serverManager.servers.isEmpty ? nil : "\(serverManager.servers.count)"
+        }
         switch serverManager.networkRoute {
         case .vpnAndWiFi, .vpnOnly:
             return "VPN"
@@ -245,40 +259,42 @@ struct SuperAppHomeView: View {
                         .foregroundStyle(.white.opacity(0.60))
                 }
 
-                // Основные кнопки главного меню: Пульт Сбер + Магнитола Kenwood + Серверы Dell / iRU
-                VStack(spacing: 14) {
-                    SuperAppMenuCard(
-                        symbol: "tv.fill",
-                        title: "Пульт Сбер",
-                        subtitle: sberSubtitle,
-                        badgeText: sberReady ? "Готов" : nil,
-                        badgeActive: sberReady,
-                        accentIcon: true,
-                        theme: .sber,
-                        action: onOpenSber
-                    )
+                // Основные кнопки главного меню в нативном Liquid Glass контейнере
+                NativeGlassContainer(spacing: 14) {
+                    VStack(spacing: 14) {
+                        SuperAppMenuCard(
+                            symbol: "tv.fill",
+                            title: "Пульт Сбер",
+                            subtitle: sberSubtitle,
+                            badgeText: sberReady ? "Готов" : nil,
+                            badgeActive: sberReady,
+                            accentIcon: true,
+                            theme: .sber,
+                            action: onOpenSber
+                        )
 
-                    SuperAppMenuCard(
-                        symbol: "car.fill",
-                        title: "Магнитола KENWOOD",
-                        subtitle: kenwoodSubtitle,
-                        badgeText: kenwood.isConnected ? "Подключено" : nil,
-                        badgeActive: kenwood.isConnected,
-                        accentIcon: true,
-                        theme: .kenwood,
-                        action: onOpenKenwood
-                    )
+                        SuperAppMenuCard(
+                            symbol: "car.fill",
+                            title: "Магнитола KENWOOD",
+                            subtitle: kenwoodSubtitle,
+                            badgeText: kenwood.isConnected ? "Подключено" : nil,
+                            badgeActive: kenwood.isConnected,
+                            accentIcon: true,
+                            theme: .kenwood,
+                            action: onOpenKenwood
+                        )
 
-                    SuperAppMenuCard(
-                        symbol: "server.rack",
-                        title: "Серверы Dell / iRU",
-                        subtitle: serversSubtitle,
-                        badgeText: serversBadgeText,
-                        badgeActive: serverManager.networkRoute.isReadyForLAN,
-                        accentIcon: true,
-                        theme: .server,
-                        action: onOpenServers
-                    )
+                        SuperAppMenuCard(
+                            symbol: "server.rack",
+                            title: "Серверы Dell / iRU",
+                            subtitle: serversSubtitle,
+                            badgeText: serversBadgeText,
+                            badgeActive: serverManager.isMonitoring && serverManager.networkRoute.isReadyForLAN,
+                            accentIcon: true,
+                            theme: .server,
+                            action: onOpenServers
+                        )
+                    }
                 }
 
                 Spacer(minLength: 24)
@@ -581,153 +597,130 @@ struct RemotePadView: View {
             let rowHeight = min(max(h * 0.076, 46), 60)
 
             VStack(spacing: vSpacing) {
-                // Верхняя панель устройства
-                HStack(spacing: 8) {
-                    Button {
-                        Haptics.tap()
-                        onBackToMenu()
-                    } label: {
-                        Image(systemName: "square.grid.2x2.fill")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.88))
-                            .frame(width: 38, height: 38)
-                            .background(LiquidGlassCircle())
-                    }
-                    .buttonStyle(RemotePressStyle())
-                    .accessibilityLabel("Главное меню")
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(remote.connectedDevice?.name ?? "Салют ТВ")
-                            .font(.system(size: compact ? 19 : 21, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(channelColor)
-                                .frame(width: 7, height: 7)
-                                .shadow(color: channelColor.opacity(0.8), radius: 4)
-                            Text(channelText)
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(channelColor)
-                        }
-                    }
-
-                    Spacer()
-
-                    // Быстрый глобальный поиск по ТВ
-                    Button {
-                        Haptics.tap()
-                        initialTextSheetMode = .globalSearch
-                        showTextSheet = true
-                    } label: {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(SberPalette.lime)
-                            .frame(width: 38, height: 38)
-                            .background(LiquidGlassCircle(highlighted: false, accent: false))
-                    }
-                    .buttonStyle(RemotePressStyle())
-                    .accessibilityLabel("Глобальный поиск по ТВ")
-
-                    if remote.session == nil {
+                // Верхняя панель устройства в нативном GlassEffectContainer
+                NativeGlassContainer(spacing: 8) {
+                    HStack(spacing: 8) {
                         Button {
                             Haptics.tap()
-                            remote.reconnectChannel()
+                            onBackToMenu()
                         } label: {
-                            Image(systemName: "arrow.clockwise")
+                            Image(systemName: "square.grid.2x2.fill")
                                 .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(SberPalette.brightGreen)
+                                .foregroundStyle(.white.opacity(0.88))
                                 .frame(width: 38, height: 38)
                                 .background(LiquidGlassCircle())
                         }
                         .buttonStyle(RemotePressStyle())
-                        .accessibilityLabel("Переподключить канал")
-                    }
+                        .accessibilityLabel("Главное меню")
 
-                    Button {
-                        Haptics.tap()
-                        remote.forgetSavedDevice()
-                    } label: {
-                        Image(systemName: "link.badge.plus")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.85))
-                            .frame(width: 38, height: 38)
-                            .background(LiquidGlassCircle())
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(remote.connectedDevice?.name ?? "Салют ТВ")
+                                .font(.system(size: compact ? 19 : 21, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(channelColor)
+                                    .frame(width: 7, height: 7)
+                                    .shadow(color: channelColor.opacity(0.8), radius: 4)
+                                Text(channelText)
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(channelColor)
+                            }
+                        }
+
+                        Spacer()
+
+                        // Быстрый глобальный поиск по ТВ
+                        Button {
+                            Haptics.tap()
+                            initialTextSheetMode = .globalSearch
+                            showTextSheet = true
+                        } label: {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(SberPalette.lime)
+                                .frame(width: 38, height: 38)
+                                .background(LiquidGlassCircle(highlighted: false, accent: false))
+                        }
+                        .buttonStyle(RemotePressStyle())
+                        .accessibilityLabel("Глобальный поиск по ТВ")
+
+                        if remote.session == nil {
+                            Button {
+                                Haptics.tap()
+                                remote.reconnectChannel()
+                            } label: {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(SberPalette.brightGreen)
+                                    .frame(width: 38, height: 38)
+                                    .background(LiquidGlassCircle())
+                            }
+                            .buttonStyle(RemotePressStyle())
+                            .accessibilityLabel("Переподключить канал")
+                        }
+
+                        Button {
+                            Haptics.tap()
+                            remote.forgetSavedDevice()
+                        } label: {
+                            Image(systemName: "link.badge.plus")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.85))
+                                .frame(width: 38, height: 38)
+                                .background(LiquidGlassCircle())
+                        }
+                        .buttonStyle(RemotePressStyle())
+                        .accessibilityLabel("Сменить телевизор")
                     }
-                    .buttonStyle(RemotePressStyle())
-                    .accessibilityLabel("Сменить телевизор")
                 }
 
                 // Ряд 1: Питание (нажатие / удержание), Настройки, Найти пульт
-                HStack(spacing: 10) {
-                    PowerRemoteButton(
-                        height: rowHeight,
-                        onDown: { remote.sendDown(.power) },
-                        onUp: { remote.sendUp(.power) }
-                    )
-                    ActionRemoteButton(
-                        symbol: "gearshape.fill",
-                        title: "Настройки",
-                        height: rowHeight
-                    ) {
-                        send(.settings)
-                    }
-                    ActionRemoteButton(
-                        symbol: "dot.radiowaves.left.and.right",
-                        title: "Найти пульт",
-                        height: rowHeight
-                    ) {
-                        Haptics.tap()
-                        remote.findRemote()
+                NativeGlassContainer(spacing: 10) {
+                    HStack(spacing: 10) {
+                        PowerRemoteButton(
+                            height: rowHeight,
+                            onDown: { remote.sendDown(.power) },
+                            onUp: { remote.sendUp(.power) }
+                        )
+                        ActionRemoteButton(
+                            symbol: "gearshape.fill",
+                            title: "Настройки",
+                            height: rowHeight
+                        ) {
+                            send(.settings)
+                        }
+                        ActionRemoteButton(
+                            symbol: "dot.radiowaves.left.and.right",
+                            title: "Найти пульт",
+                            height: rowHeight
+                        ) {
+                            Haptics.tap()
+                            remote.findRemote()
+                        }
                     }
                 }
 
-                // Центр: Liquid Glass дека с 4 режимами (Кнопки / Жесты / Курсор / Аэромышь)
+                // Центр: Liquid Glass дека с нативным iOS 26–27 segmented Picker (Кнопки / Жесты / Курсор / Аэро)
                 ZStack {
                     LiquidGlassPanel(cornerRadius: 30)
 
                     VStack(spacing: compact ? 6 : 8) {
-                        // Переключатель 4 режимов управления
-                        HStack(spacing: 4) {
+                        Picker(
+                            "Режим управления",
+                            selection: Binding(
+                                get: { padMode },
+                                set: { selectPadMode($0) }
+                            )
+                        ) {
                             ForEach(CenterPadMode.allCases) { mode in
-                                let selected = mode == padMode
-                                Button {
-                                    selectPadMode(mode)
-                                } label: {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: mode.symbol)
-                                            .font(.system(size: compact ? 11 : 12, weight: .semibold))
-                                        Text(mode.title)
-                                            .font(.system(size: compact ? 10 : 11, weight: .semibold))
-                                            .lineLimit(1)
-                                            .minimumScaleFactor(0.8)
-                                    }
-                                    .foregroundStyle(selected ? .white : .white.opacity(0.62))
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: compact ? 30 : 32)
-                                    .background(
-                                        Group {
-                                            if selected {
-                                                Capsule()
-                                                    .fill(SberPalette.accentButtonGradient)
-                                                    .overlay(
-                                                        Capsule().strokeBorder(SberPalette.glassAccentBorder, lineWidth: 1)
-                                                    )
-                                                    .shadow(color: SberPalette.brightGreen.opacity(0.35), radius: 6, y: 2)
-                                            }
-                                        }
-                                    )
-                                }
-                                .buttonStyle(.plain)
+                                Text(mode.title).tag(mode)
                             }
                         }
-                        .padding(3)
-                        .background(
-                            Capsule()
-                                .fill(Color.black.opacity(0.26))
-                                .overlay(Capsule().strokeBorder(.white.opacity(0.10), lineWidth: 1))
-                        )
-                        .padding(.horizontal, 10)
+                        .pickerStyle(.segmented)
+                        .tint(SberPalette.brightGreen)
+                        .padding(.horizontal, 12)
                         .padding(.top, 10)
 
                         // Рабочая поверхность выбранного режима
@@ -838,75 +831,71 @@ struct RemotePadView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                // Ряд 2: Назад, Домой
-                HStack(spacing: 10) {
-                    ActionRemoteButton(
-                        symbol: "arrow.uturn.backward",
-                        title: "Назад",
-                        height: rowHeight
-                    ) {
-                        send(.back)
-                    }
-                    ActionRemoteButton(
-                        symbol: "house.fill",
-                        title: "Домой",
-                        height: rowHeight
-                    ) {
-                        send(.home)
-                    }
-                }
+                // Нижние ряды кнопок пульта в общем нативном GlassEffectContainer
+                NativeGlassContainer(spacing: 10) {
+                    VStack(spacing: vSpacing) {
+                        // Ряд 2: Назад, Домой
+                        HStack(spacing: 10) {
+                            ActionRemoteButton(
+                                symbol: "arrow.uturn.backward",
+                                title: "Назад",
+                                height: rowHeight
+                            ) {
+                                send(.back)
+                            }
+                            ActionRemoteButton(
+                                symbol: "house.fill",
+                                title: "Домой",
+                                height: rowHeight
+                            ) {
+                                send(.home)
+                            }
+                        }
 
-                // Ряд 3: Громкость −, Mute, Громкость +
-                HStack(spacing: 10) {
-                    ActionRemoteButton(
-                        symbol: "speaker.wave.1.fill",
-                        title: "VOL −",
-                        height: rowHeight
-                    ) {
-                        send(.volumeDown)
-                    }
-                    ActionRemoteButton(
-                        symbol: "speaker.slash.fill",
-                        title: "MUTE",
-                        height: rowHeight
-                    ) {
-                        send(.mute)
-                    }
-                    ActionRemoteButton(
-                        symbol: "speaker.wave.3.fill",
-                        title: "VOL +",
-                        height: rowHeight
-                    ) {
-                        send(.volumeUp)
-                    }
-                }
+                        // Ряд 3: Громкость −, Mute, Громкость +
+                        HStack(spacing: 10) {
+                            ActionRemoteButton(
+                                symbol: "speaker.wave.1.fill",
+                                title: "VOL −",
+                                height: rowHeight
+                            ) {
+                                send(.volumeDown)
+                            }
+                            ActionRemoteButton(
+                                symbol: "speaker.slash.fill",
+                                title: "MUTE",
+                                height: rowHeight
+                            ) {
+                                send(.mute)
+                            }
+                            ActionRemoteButton(
+                                symbol: "speaker.wave.3.fill",
+                                title: "VOL +",
+                                height: rowHeight
+                            ) {
+                                send(.volumeUp)
+                            }
+                        }
 
-                // Ряд 4: Пауза/Плей, Голос, Поиск / Ввод
-                HStack(spacing: 10) {
-                    ActionRemoteButton(
-                        symbol: "playpause.fill",
-                        title: "Пауза / Плей",
-                        height: rowHeight
-                    ) {
-                        send(.playPause)
-                    }
-                    ActionRemoteButton(
-                        symbol: remote.voiceState == .idle ? "mic.fill" : "stop.fill",
-                        title: remote.voiceState == .idle ? "Голос" : (remote.voiceState == .starting ? "Запуск…" : "Слушаю…"),
-                        height: rowHeight,
-                        highlighted: remote.voiceState != .idle
-                    ) {
-                        Haptics.tap()
-                        remote.toggleVoice()
-                    }
-                    ActionRemoteButton(
-                        symbol: "keyboard",
-                        title: "Поиск / Ввод",
-                        height: rowHeight
-                    ) {
-                        Haptics.tap()
-                        initialTextSheetMode = .globalSearch
-                        showTextSheet = true
+                        // Ряд 4: Пауза/Плей, Голос
+                        HStack(spacing: 10) {
+                            ActionRemoteButton(
+                                symbol: "playpause.fill",
+                                title: "Пауза / Плей",
+                                height: rowHeight
+                            ) {
+                                send(.playPause)
+                            }
+                            ActionRemoteButton(
+                                symbol: remote.voiceState == .idle ? "mic.fill" : "stop.fill",
+                                title: remote.voiceState == .idle ? "Голос" : (remote.voiceState == .starting ? "Запуск…" : "Слушаю…"),
+                                height: rowHeight,
+                                highlighted: remote.voiceState != .idle
+                            ) {
+                                Haptics.tap()
+                                remote.toggleVoice()
+                            }
+                        }
                     }
                 }
 
@@ -1645,52 +1634,22 @@ struct TextInputSheet: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        ZStack {
-            SberLiquidBackdrop()
+        NativeNavigationContainer {
+            ZStack {
+                SberLiquidBackdrop()
 
-            VStack(spacing: 16) {
-                Capsule()
-                    .fill(.white.opacity(0.24))
-                    .frame(width: 40, height: 4)
-                    .padding(.top, 10)
-
-                Text(mode == .globalSearch ? "Глобальный поиск по ТВ" : "Ввод текста на ТВ")
-                    .font(.title3.bold())
-                    .foregroundStyle(.white)
-
-                // Переключатель «Поиск по ТВ» / «Ввод текста»
-                HStack(spacing: 4) {
-                    ForEach(TextSheetMode.allCases) { tab in
-                        let selected = tab == mode
-                        Button {
-                            Haptics.tap()
-                            withAnimation(.easeInOut(duration: 0.18)) {
-                                mode = tab
-                            }
-                        } label: {
-                            Text(tab.title)
-                                .font(.footnote.weight(.semibold))
-                                .foregroundStyle(selected ? .white : .white.opacity(0.62))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 9)
-                                .background(
-                                    Group {
-                                        if selected {
-                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                                .fill(SberPalette.accentButtonGradient)
-                                                .overlay(
-                                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                                        .strokeBorder(SberPalette.glassAccentBorder, lineWidth: 1)
-                                                )
-                                        }
-                                    }
-                                )
+                VStack(spacing: 16) {
+                    // Нативный iOS 26–27 segmented Picker
+                    Picker("Режим", selection: $mode) {
+                        ForEach(TextSheetMode.allCases) { tab in
+                            Text(tab.title).tag(tab)
                         }
-                        .buttonStyle(.plain)
                     }
-                }
-                .padding(3)
-                .background(LiquidGlassPanel(cornerRadius: 15))
+                    .pickerStyle(.segmented)
+                    .tint(SberPalette.brightGreen)
+                    .onChange(of: mode) { _ in
+                        Haptics.tap()
+                    }
 
                 Text(
                     mode == .globalSearch
@@ -1824,10 +1783,20 @@ struct TextInputSheet: View {
                 }
 
                 Spacer()
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
             }
-            .padding(.horizontal, 20)
+            .navigationTitle(mode == .globalSearch ? "Поиск по ТВ" : "Ввод текста")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Закрыть") { dismiss() }
+                }
+            }
         }
         .preferredColorScheme(.dark)
+        .nativePresentationSheet()
         .onAppear {
             mode = initialMode
             focused = true
@@ -1929,6 +1898,7 @@ struct PinSheet: View {
             .padding(.horizontal, 24)
         }
         .preferredColorScheme(.dark)
+        .nativePresentationSheet()
         .onAppear { focused = true }
     }
 }

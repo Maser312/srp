@@ -99,6 +99,22 @@ struct ServerGlassPanel: View {
     var accentGlow: Color? = nil
 
     var body: some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            let tintColor = (accentGlow ?? ServerPalette.dellBlue).opacity(0.16)
+            Color.clear
+                .glassEffect(.regular.tint(tintColor), in: shape)
+                .shadow(color: Color.black.opacity(0.32), radius: 14, y: 7)
+        } else {
+            legacyPanel
+        }
+        #else
+        legacyPanel
+        #endif
+    }
+
+    private var legacyPanel: some View {
         ZStack {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(.ultraThinMaterial)
@@ -128,6 +144,24 @@ struct ServerGlassCircle: View {
     var accent: Bool = false
 
     var body: some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            Color.clear
+                .glassEffect(
+                    accent
+                        ? .regular.tint(ServerPalette.dellBlue.opacity(0.62)).interactive()
+                        : .regular.tint(ServerPalette.iruCyan.opacity(0.10)).interactive(),
+                    in: Circle()
+                )
+        } else {
+            legacyCircle
+        }
+        #else
+        legacyCircle
+        #endif
+    }
+
+    private var legacyCircle: some View {
         ZStack {
             if accent {
                 Circle()
@@ -193,15 +227,8 @@ struct ServerHubView: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)
-                        .background(
-                            Capsule()
-                                .fill(Color(red: 0.05, green: 0.12, blue: 0.22).opacity(0.95))
-                                .overlay(
-                                    Capsule()
-                                        .strokeBorder(ServerPalette.glassAccentBorder, lineWidth: 1)
-                                )
-                        )
-                        .shadow(color: Color.black.opacity(0.45), radius: 10, y: 4)
+                        .nativeLiquidGlass(in: Capsule(), tint: ServerPalette.dellBlue.opacity(0.32))
+                        .shadow(color: Color.black.opacity(0.40), radius: 10, y: 4)
                         .padding(.bottom, 22)
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -400,22 +427,13 @@ struct ServerHubView: View {
                 Haptics.medium()
                 manager.unlockWithBiometrics()
             } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "lock.open.fill")
-                        .font(.body.weight(.bold))
-                    Text("Разблокировать")
-                        .font(.headline.weight(.bold))
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 28)
-                .padding(.vertical, 14)
-                .background(
-                    Capsule()
-                        .fill(ServerPalette.accentButtonGradient)
-                        .overlay(Capsule().strokeBorder(ServerPalette.glassAccentBorder, lineWidth: 1))
-                )
+                Label("Разблокировать", systemImage: "lock.open.fill")
+                    .font(.headline.weight(.bold))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
             }
-            .buttonStyle(RemotePressStyle())
+            .nativeGlassButton(prominent: true, tint: ServerPalette.dellBlue)
+            .controlSize(.large)
 
             Spacer()
         }
@@ -424,168 +442,124 @@ struct ServerHubView: View {
     // MARK: - Основной интерфейс
 
     private var mainContent: some View {
-        VStack(spacing: 0) {
-            headerBar
+        NativeNavigationContainer {
+            ZStack {
+                ServerLiquidBackdrop()
 
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 14) {
-                    networkRouteBanner
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 14) {
+                        networkRouteBanner
 
-                    if manager.servers.isEmpty {
-                        emptyOnboardingCard
-                    } else {
-                        ForEach(manager.servers) { server in
-                            ServerDashboardCard(
-                                server: server,
-                                telemetry: manager.telemetry[server.id] ?? ServerTelemetry(),
-                                capabilities: manager.capabilities(for: server),
-                                hasPassword: !manager.password(for: server).isEmpty,
-                                onOpenControl: {
-                                    Haptics.medium()
-                                    activeControlServer = server
-                                },
-                                onOpenConsole: {
-                                    Haptics.medium()
-                                    activeConsoleServer = server
-                                },
-                                onPowerMenu: {
-                                    Haptics.light()
-                                    powerMenuServer = server
-                                },
-                                onRefresh: {
-                                    Haptics.light()
-                                    Task { await manager.checkServer(server, deepProbe: true) }
-                                },
-                                onEdit: {
-                                    Haptics.light()
-                                    editingProfile = server
-                                },
-                                onDelete: {
-                                    Haptics.light()
-                                    pendingDeleteServer = server
-                                }
-                            )
+                        if manager.servers.isEmpty {
+                            emptyOnboardingCard
+                        } else {
+                            ForEach(manager.servers) { server in
+                                ServerDashboardCard(
+                                    server: server,
+                                    telemetry: manager.telemetry[server.id] ?? ServerTelemetry(),
+                                    capabilities: manager.capabilities(for: server),
+                                    hasPassword: !manager.password(for: server).isEmpty,
+                                    onOpenControl: {
+                                        Haptics.medium()
+                                        activeControlServer = server
+                                    },
+                                    onOpenConsole: {
+                                        Haptics.medium()
+                                        activeConsoleServer = server
+                                    },
+                                    onPowerMenu: {
+                                        Haptics.light()
+                                        powerMenuServer = server
+                                    },
+                                    onRefresh: {
+                                        Haptics.light()
+                                        Task { await manager.checkServer(server, deepProbe: true) }
+                                    },
+                                    onEdit: {
+                                        Haptics.light()
+                                        editingProfile = server
+                                    },
+                                    onDelete: {
+                                        Haptics.light()
+                                        pendingDeleteServer = server
+                                    }
+                                )
+                            }
                         }
 
-                        quickAddRow
+                        Spacer(minLength: 26)
                     }
-
-                    Spacer(minLength: 26)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 10)
-            }
-        }
-    }
-
-    private var headerBar: some View {
-        HStack(spacing: 10) {
-            Button {
-                Haptics.light()
-                onExit()
-            } label: {
-                ZStack {
-                    ServerGlassCircle()
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.white)
-                }
-                .frame(width: 40, height: 40)
-            }
-            .buttonStyle(RemotePressStyle())
-
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Image(systemName: "server.rack")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(ServerPalette.iruCyan)
-                    Text("СЕРВЕРЫ")
-                        .font(.system(size: 17, weight: .black, design: .rounded))
-                        .foregroundStyle(.white)
-                }
-                Text("Dell iDRAC · iRU BMC · Kerio VPN")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.58))
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 4)
-
-            // Автопоиск iDRAC / BMC в локальной сети / VPN
-            Button {
-                Haptics.medium()
-                isShowingDiscovery = true
-            } label: {
-                ZStack {
-                    ServerGlassCircle()
-                    Image(systemName: "dot.radiowaves.left.and.right")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(ServerPalette.iruCyan)
-                }
-                .frame(width: 38, height: 38)
-            }
-            .buttonStyle(RemotePressStyle())
-
-            // Переключатель защиты Face ID
-            Button {
-                Haptics.light()
-                manager.requireBiometricLock.toggle()
-                manager.showNotice(
-                    manager.requireBiometricLock
-                        ? "Защита входа по Face ID включена"
-                        : "Защита входа по Face ID отключена"
-                )
-            } label: {
-                ZStack {
-                    ServerGlassCircle()
-                    Image(systemName: manager.requireBiometricLock ? "lock.fill" : "lock.open.fill")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(manager.requireBiometricLock ? ServerPalette.iruCyan : Color.white.opacity(0.75))
-                }
-                .frame(width: 38, height: 38)
-            }
-            .buttonStyle(RemotePressStyle())
-
-            // Обновить статус всех серверов
-            Button {
-                Haptics.light()
-                manager.refreshAllServers()
-            } label: {
-                ZStack {
-                    ServerGlassCircle()
-                    if manager.isRefreshingAll {
-                        ProgressView()
-                            .tint(ServerPalette.iruCyan)
-                            .scaleEffect(0.8)
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.white)
+                .refreshable {
+                    for server in manager.servers {
+                        await manager.checkServer(server)
                     }
                 }
-                .frame(width: 38, height: 38)
             }
-            .buttonStyle(RemotePressStyle())
-
-            // Добавить новый сервер
-            Button {
-                Haptics.medium()
-                newServerDefaultVendor = .dellIDRAC
-                isCreatingNew = true
-            } label: {
-                ZStack {
-                    ServerGlassCircle(accent: true)
-                    Image(systemName: "plus")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.white)
+            .navigationTitle("Серверы")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        Haptics.light()
+                        onExit()
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.body.weight(.semibold))
+                    }
+                    .accessibilityLabel("Назад")
                 }
-                .frame(width: 38, height: 38)
+
+                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    Button {
+                        Haptics.medium()
+                        isShowingDiscovery = true
+                    } label: {
+                        Image(systemName: "dot.radiowaves.left.and.right")
+                    }
+                    .accessibilityLabel("Автопоиск iDRAC / BMC")
+
+                    Button {
+                        Haptics.light()
+                        manager.requireBiometricLock.toggle()
+                        manager.showNotice(
+                            manager.requireBiometricLock
+                                ? "Защита входа по Face ID включена"
+                                : "Защита входа по Face ID отключена"
+                        )
+                    } label: {
+                        Image(systemName: manager.requireBiometricLock ? "lock.fill" : "lock.open.fill")
+                    }
+                    .tint(manager.requireBiometricLock ? ServerPalette.iruCyan : nil)
+                    .accessibilityLabel("Защита Face ID")
+
+                    Button {
+                        Haptics.light()
+                        manager.refreshAllServers()
+                    } label: {
+                        if manager.isRefreshingAll {
+                            ProgressView()
+                                .tint(ServerPalette.iruCyan)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                    }
+                    .accessibilityLabel("Обновить статус")
+
+                    Button {
+                        Haptics.medium()
+                        newServerDefaultVendor = .dellIDRAC
+                        isCreatingNew = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .tint(ServerPalette.iruCyan)
+                    .accessibilityLabel("Добавить сервер")
+                }
             }
-            .buttonStyle(RemotePressStyle())
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 10)
     }
 
     private var networkRouteBanner: some View {
@@ -628,212 +602,67 @@ struct ServerHubView: View {
     }
 
     private var emptyOnboardingCard: some View {
-        VStack(spacing: 18) {
-            ZStack {
-                ServerGlassCircle(accent: true)
-                    .frame(width: 68, height: 68)
-                Image(systemName: "server.rack")
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundStyle(.white)
-            }
-
-            VStack(spacing: 6) {
-                Text("Добавьте серверы Dell и iRU")
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(.white)
-                Text("Адреса, логины и пароли хранятся локально в защищённом iOS Keychain. Поддерживается авто-вход, самоподписанный SSL, десктопный режим и Redfish-телеметрия.")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.65))
-                    .multilineTextAlignment(.center)
-            }
-
-            VStack(spacing: 10) {
-                Button {
-                    Haptics.medium()
-                    isShowingDiscovery = true
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "dot.radiowaves.left.and.right")
-                            .font(.body.weight(.bold))
-                        Text("Автопоиск iDRAC / BMC в сети")
+        NativeEmptyStateView(
+            title: "Добавьте серверы Dell и iRU",
+            systemImage: "server.rack",
+            description: "Адреса, логины и пароли хранятся локально в защищённом iOS Keychain. Поддерживается авто-вход, самоподписанный SSL, десктопный режим и Redfish-телеметрия."
+        ) {
+            NativeGlassContainer(spacing: 10) {
+                VStack(spacing: 10) {
+                    Button {
+                        Haptics.medium()
+                        isShowingDiscovery = true
+                    } label: {
+                        Label("Автопоиск iDRAC / BMC в сети", systemImage: "dot.radiowaves.left.and.right")
                             .font(.subheadline.weight(.bold))
-                        Spacer()
-                        Image(systemName: "magnifyingglass")
-                            .font(.body.weight(.bold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 4)
                     }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(ServerPalette.accentButtonGradient)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .strokeBorder(ServerPalette.glassAccentBorder, lineWidth: 1)
-                            )
-                    )
-                }
-                .buttonStyle(RemotePressStyle())
+                    .nativeGlassButton(prominent: true, tint: ServerPalette.dellBlue)
+                    .controlSize(.large)
 
-                Button {
-                    Haptics.medium()
-                    newServerDefaultVendor = .dellIDRAC
-                    isCreatingNew = true
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "server.rack")
-                            .font(.body.weight(.bold))
-                        Text("Добавить сервер Dell (iDRAC)")
-                            .font(.subheadline.weight(.bold))
-                        Spacer()
-                        Image(systemName: "plus.circle.fill")
-                            .font(.body)
+                    Button {
+                        Haptics.medium()
+                        newServerDefaultVendor = .dellIDRAC
+                        isCreatingNew = true
+                    } label: {
+                        Label("Добавить сервер Dell (iDRAC)", systemImage: "server.rack")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 3)
                     }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [ServerVendor.dellIDRAC.accentColor, ServerVendor.dellIDRAC.secondaryAccentColor],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .strokeBorder(ServerPalette.glassAccentBorder, lineWidth: 1)
-                            )
-                    )
-                }
-                .buttonStyle(RemotePressStyle())
+                    .nativeGlassButton(prominent: false, tint: ServerVendor.dellIDRAC.accentColor)
+                    .controlSize(.large)
 
-                Button {
-                    Haptics.medium()
-                    newServerDefaultVendor = .iruBMC
-                    isCreatingNew = true
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "cpu")
-                            .font(.body.weight(.bold))
-                        Text("Добавить сервер iRU (BMC / IPMI)")
-                            .font(.subheadline.weight(.bold))
-                        Spacer()
-                        Image(systemName: "plus.circle.fill")
-                            .font(.body)
+                    Button {
+                        Haptics.medium()
+                        newServerDefaultVendor = .iruBMC
+                        isCreatingNew = true
+                    } label: {
+                        Label("Добавить сервер iRU (BMC / IPMI)", systemImage: "cpu")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 3)
                     }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [ServerVendor.iruBMC.accentColor, ServerVendor.iruBMC.secondaryAccentColor],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .strokeBorder(ServerPalette.glassAccentBorder, lineWidth: 1)
-                            )
-                    )
-                }
-                .buttonStyle(RemotePressStyle())
+                    .nativeGlassButton(prominent: false, tint: ServerVendor.iruBMC.accentColor)
+                    .controlSize(.large)
 
-                Button {
-                    Haptics.light()
-                    newServerDefaultVendor = .genericWeb
-                    isCreatingNew = true
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "globe")
-                            .font(.body.weight(.semibold))
-                        Text("Другая веб-панель (Proxmox, ESXi, роутер)")
+                    Button {
+                        Haptics.light()
+                        newServerDefaultVendor = .genericWeb
+                        isCreatingNew = true
+                    } label: {
+                        Label("Другая веб-панель (Proxmox, ESXi)", systemImage: "globe")
                             .font(.footnote.weight(.semibold))
-                        Spacer()
-                        Image(systemName: "plus")
-                            .font(.footnote.weight(.bold))
+                            .frame(maxWidth: .infinity)
                     }
-                    .foregroundStyle(.white.opacity(0.88))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color.white.opacity(0.08))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .strokeBorder(ServerPalette.glassBorderGradient, lineWidth: 1)
-                            )
-                    )
+                    .nativeGlassButton(prominent: false)
                 }
-                .buttonStyle(RemotePressStyle())
+                .padding(.top, 6)
             }
         }
-        .padding(20)
+        .padding(16)
         .background(ServerGlassPanel(cornerRadius: 24, accentGlow: ServerPalette.dellBlue))
-    }
-
-    private var quickAddRow: some View {
-        VStack(spacing: 10) {
-            Button {
-                Haptics.medium()
-                isShowingDiscovery = true
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "dot.radiowaves.left.and.right")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(ServerPalette.iruCyan)
-                    Text("Найти iDRAC / iRU BMC в сети")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.white)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(ServerGlassPanel(cornerRadius: 16, accentGlow: ServerPalette.iruCyan))
-            }
-            .buttonStyle(RemotePressStyle())
-
-            HStack(spacing: 10) {
-                Button {
-                    Haptics.light()
-                    newServerDefaultVendor = .dellIDRAC
-                    isCreatingNew = true
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "plus")
-                            .font(.caption.weight(.bold))
-                        Text("Dell iDRAC")
-                            .font(.caption.weight(.bold))
-                    }
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(ServerGlassPanel(cornerRadius: 16, accentGlow: ServerVendor.dellIDRAC.accentColor))
-                }
-                .buttonStyle(RemotePressStyle())
-
-                Button {
-                    Haptics.light()
-                    newServerDefaultVendor = .iruBMC
-                    isCreatingNew = true
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "plus")
-                            .font(.caption.weight(.bold))
-                        Text("iRU BMC")
-                            .font(.caption.weight(.bold))
-                    }
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(ServerGlassPanel(cornerRadius: 16, accentGlow: ServerVendor.iruBMC.accentColor))
-                }
-                .buttonStyle(RemotePressStyle())
-            }
-        }
     }
 }
 
@@ -964,6 +793,11 @@ private struct ServerDashboardCard: View {
                 }
             }
 
+            // Состояние самого сервера (Работает / Выключен / Запускается + Здоровье + Системный статус)
+            if telemetry.powerStatusTitle != nil || telemetry.healthTitle != nil || telemetry.systemStateTitle != nil {
+                serverStateStrip
+            }
+
             // Живая Redfish-телеметрия (если сервер ответил)
             if telemetry.redfishAvailable {
                 VStack(alignment: .leading, spacing: 8) {
@@ -976,20 +810,6 @@ private struct ServerDashboardCard: View {
 
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
-                            if let on = telemetry.isPoweredOn {
-                                telemetryChip(
-                                    symbol: "power",
-                                    text: on ? "ВКЛ" : "ВЫКЛ",
-                                    color: on ? ServerPalette.onlineGreen : ServerPalette.warnAmber
-                                )
-                            }
-                            if let health = telemetry.health {
-                                telemetryChip(
-                                    symbol: health.lowercased() == "ok" ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
-                                    text: health.uppercased(),
-                                    color: telemetry.healthColor
-                                )
-                            }
                             if let temp = telemetry.maxTempC {
                                 telemetryChip(
                                     symbol: "thermometer",
@@ -1046,75 +866,100 @@ private struct ServerDashboardCard: View {
                     .lineLimit(2)
             }
 
-            // Основные действия: Нативный Пульт BMC + Веб-панель + быстрая кнопка Питания
-            HStack(spacing: 8) {
-                Button(action: onOpenControl) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "slider.horizontal.3")
+            // Основные действия: Нативный Пульт BMC + Веб-панель + быстрая кнопка Питания (Liquid Glass iOS 26–27)
+            NativeGlassContainer(spacing: 8) {
+                HStack(spacing: 8) {
+                    Button(action: onOpenControl) {
+                        Label("Пульт BMC", systemImage: "slider.horizontal.3")
                             .font(.caption.weight(.bold))
-                        Text("Пульт BMC")
-                            .font(.caption.weight(.bold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 4)
                     }
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 15, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [server.vendor.accentColor, server.vendor.secondaryAccentColor],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 15, style: .continuous)
-                                    .strokeBorder(ServerPalette.glassAccentBorder, lineWidth: 1)
-                            )
-                    )
-                }
-                .buttonStyle(RemotePressStyle())
+                    .nativeGlassButton(prominent: true, tint: server.vendor.accentColor)
+                    .controlSize(.regular)
 
-                Button(action: onOpenConsole) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "desktopcomputer")
+                    Button(action: onOpenConsole) {
+                        Label("Веб-панель", systemImage: "desktopcomputer")
                             .font(.caption.weight(.bold))
-                        Text("Веб-панель")
-                            .font(.caption.weight(.bold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 4)
                     }
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 15, style: .continuous)
-                            .fill(Color.white.opacity(0.10))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 15, style: .continuous)
-                                    .strokeBorder(ServerPalette.glassBorderGradient, lineWidth: 1)
-                            )
-                    )
-                }
-                .buttonStyle(RemotePressStyle())
+                    .nativeGlassButton(prominent: false)
+                    .controlSize(.regular)
 
-                Button(action: onPowerMenu) {
-                    Image(systemName: "power")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 40)
-                        .background(
-                            RoundedRectangle(cornerRadius: 15, style: .continuous)
-                                .fill(Color.white.opacity(0.10))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 15, style: .continuous)
-                                        .strokeBorder(ServerPalette.glassBorderGradient, lineWidth: 1)
-                                )
-                        )
+                    Button(action: onPowerMenu) {
+                        Image(systemName: "power")
+                            .font(.subheadline.weight(.bold))
+                            .padding(.vertical, 4)
+                    }
+                    .nativeGlassButton(prominent: false)
+                    .controlSize(.regular)
+                    .accessibilityLabel("Питание сервера")
                 }
-                .buttonStyle(RemotePressStyle())
             }
         }
         .padding(16)
         .background(ServerGlassPanel(cornerRadius: 22, accentGlow: server.vendor.accentColor))
+    }
+
+    private var serverStateStrip: some View {
+        HStack(spacing: 8) {
+            if let powerTitle = telemetry.powerStatusTitle {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(telemetry.powerStatusColor)
+                        .frame(width: 8, height: 8)
+                        .shadow(color: telemetry.powerStatusColor.opacity(0.85), radius: 4)
+                    Image(systemName: telemetry.powerStatusSymbol)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(telemetry.powerStatusColor)
+                    Text(powerTitle)
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.white)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill(telemetry.powerStatusColor.opacity(0.20))
+                        .overlay(Capsule().strokeBorder(telemetry.powerStatusColor.opacity(0.55), lineWidth: 1))
+                )
+            }
+
+            if let healthTitle = telemetry.healthTitle {
+                let isOK = (telemetry.health?.lowercased() == "ok")
+                HStack(spacing: 4) {
+                    Image(systemName: isOK ? "checkmark.shield.fill" : "exclamationmark.triangle.fill")
+                        .font(.system(size: 10, weight: .bold))
+                    Text(healthTitle)
+                        .font(.caption2.weight(.bold))
+                }
+                .foregroundStyle(telemetry.healthColor)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill(telemetry.healthColor.opacity(0.14))
+                        .overlay(Capsule().strokeBorder(telemetry.healthColor.opacity(0.40), lineWidth: 0.8))
+                )
+            }
+
+            if let sysTitle = telemetry.systemStateTitle,
+               telemetry.systemState?.lowercased() != "enabled" {
+                Text(sysTitle)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.82))
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(Color.white.opacity(0.10))
+                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.18), lineWidth: 0.8))
+                    )
+            }
+
+            Spacer(minLength: 0)
+        }
     }
 
     private func telemetryChip(symbol: String, text: String, color: Color) -> some View {
@@ -1160,238 +1005,150 @@ struct ServerEditorSheet: View {
     @State private var validationError: String?
 
     var body: some View {
-        ZStack {
-            ServerLiquidBackdrop()
-            VStack(spacing: 0) {
-                Capsule()
-                    .fill(Color.white.opacity(0.24))
-                    .frame(width: 40, height: 4)
-                    .padding(.top, 10)
-
-                editorHeader
-
-                ScrollView(showsIndicators: false) {
-                    editorForm
+        NativeNavigationContainer {
+            ZStack {
+                ServerLiquidBackdrop()
+                editorForm
+            }
+            .navigationTitle(existing == nil ? "Новый сервер" : "Настройки сервера")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Отмена") { dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Сохранить") { save() }
+                        .font(.body.weight(.bold))
+                        .tint(ServerPalette.iruCyan)
                 }
             }
         }
+        .nativePresentationSheet()
         .preferredColorScheme(.dark)
         .onAppear(perform: loadExistingProfile)
-    }
-
-    private var editorHeader: some View {
-        HStack {
-            Button("Отмена") { dismiss() }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.70))
-
-            Spacer()
-
-            Text(existing == nil ? "Новый сервер" : "Настройки сервера")
-                .font(.headline.weight(.bold))
-                .foregroundStyle(.white)
-
-            Spacer()
-
-            Button("Сохранить") { save() }
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(ServerPalette.iruCyan)
+        .onChange(of: vendor) { newVendor in
+            let knownDefaults = ServerVendor.allCases.map(\.defaultUsername)
+            if username.isEmpty || knownDefaults.contains(username) {
+                username = newVendor.defaultUsername
+            }
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 14)
     }
 
     private var editorForm: some View {
-        VStack(spacing: 14) {
+        Form {
             vendorSection
             connectionSection
             compatibilitySection
 
             if let err = validationError {
-                Text(err)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(ServerPalette.dangerRed)
-                    .padding(.horizontal, 6)
+                Section {
+                    Label(err, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ServerPalette.dangerRed)
+                }
+                .listRowBackground(Color.white.opacity(0.06))
             }
 
-            saveButton
+            Section {
+                Button(action: save) {
+                    Text(existing == nil ? "Добавить сервер" : "Сохранить изменения")
+                        .font(.headline.weight(.bold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 4)
+                }
+                .nativeGlassButton(prominent: true, tint: ServerPalette.dellBlue)
+                .controlSize(.large)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+            }
         }
-        .padding(.horizontal, 16)
+        .nativeScrollContentHidden()
     }
 
     private var vendorSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionTitle("Тип панели управления")
-            HStack(spacing: 8) {
+        Section("Тип панели управления") {
+            Picker("Тип панели", selection: $vendor) {
                 ForEach(ServerVendor.allCases) { item in
-                    Button {
-                        Haptics.light()
-                        let wasDefaultUser = username.isEmpty || username == vendor.defaultUsername
-                        vendor = item
-                        if wasDefaultUser {
-                            username = item.defaultUsername
-                        }
-                    } label: {
-                        VStack(spacing: 5) {
-                            Image(systemName: item.symbol)
-                                .font(.system(size: 16, weight: .bold))
-                            Text(item.shortBadge)
-                                .font(.system(size: 10, weight: .bold))
-                                .lineLimit(1)
-                        }
-                        .foregroundStyle(vendor == item ? Color.white : Color.white.opacity(0.65))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(vendor == item ? item.accentColor.opacity(0.45) : Color.white.opacity(0.06))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .strokeBorder(
-                                            vendor == item ? item.accentColor : Color.white.opacity(0.12),
-                                            lineWidth: vendor == item ? 1.4 : 1
-                                        )
-                                )
-                        )
-                    }
-                    .buttonStyle(RemotePressStyle())
+                    Text(item.shortBadge).tag(item)
                 }
             }
+            .pickerStyle(.segmented)
         }
-        .padding(14)
-        .background(ServerGlassPanel(cornerRadius: 20))
+        .listRowBackground(Color.white.opacity(0.07))
     }
 
     private var connectionSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("Подключение и учётные данные")
-            editorField(
-                label: "Название",
-                placeholder: vendor == .dellIDRAC ? "Dell PowerEdge R740" : (vendor == .iruBMC ? "iRU Rock S2108" : "Основной сервер"),
+        Section("Подключение и учётные данные") {
+            TextField(
+                vendor == .dellIDRAC ? "Dell PowerEdge R740" : (vendor == .iruBMC ? "iRU Rock S2108" : "Название сервера"),
                 text: $name
             )
-            editorField(
-                label: "Адрес (IP или URL)",
-                placeholder: vendor.addressPlaceholder,
-                text: $address,
-                keyboard: .URL,
-                disableAutocap: true
-            )
-            editorField(
-                label: "Логин",
-                placeholder: vendor.defaultUsername,
-                text: $username,
-                disableAutocap: true
-            )
-            passwordEditor
-            editorField(
-                label: "MAC-адрес для Wake-on-LAN (необязательно)",
-                placeholder: "AA:BB:CC:DD:EE:FF",
-                text: $macAddress,
-                disableAutocap: true
-            )
-            editorField(
-                label: "Заметка (стойка, роль, порт)",
-                placeholder: "Стойка 1 · Виртуализация",
-                text: $notes
-            )
-        }
-        .padding(14)
-        .background(ServerGlassPanel(cornerRadius: 20))
-    }
+            .textInputAutocapitalization(.sentences)
 
-    private var passwordEditor: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text("Пароль (сохраняется в iOS Keychain)")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.68))
+            TextField(vendor.addressPlaceholder, text: $address)
+                .keyboardType(.URL)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled(true)
+
+            TextField("Логин (\(vendor.defaultUsername))", text: $username)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled(true)
 
             HStack(spacing: 8) {
                 Group {
                     if showPassword {
-                        TextField("Введите пароль", text: $password)
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
+                        TextField("Пароль (сохраняется в Keychain)", text: $password)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled(true)
                     } else {
-                        SecureField("Введите пароль", text: $password)
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
+                        SecureField("Пароль (сохраняется в Keychain)", text: $password)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled(true)
                     }
                 }
-                .font(.subheadline)
-                .foregroundStyle(.white)
 
                 Button {
                     showPassword.toggle()
                 } label: {
                     Image(systemName: showPassword ? "eye.slash.fill" : "eye.fill")
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.65))
+                        .foregroundStyle(.secondary)
                 }
+                .buttonStyle(.plain)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 11)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.black.opacity(0.32))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
-                    )
-            )
+
+            TextField("MAC-адрес для Wake-on-LAN (необязательно)", text: $macAddress)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled(true)
+
+            TextField("Заметка (стойка, роль, порт)", text: $notes)
         }
+        .listRowBackground(Color.white.opacity(0.07))
     }
 
     private var compatibilitySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("Параметры веб-панели и BMC")
-
+        Section("Параметры веб-панели и BMC") {
             toggleRow(
                 title: "Доверять самоподписанному SSL",
                 subtitle: "Нужно для локальных сертификатов Dell iDRAC и iRU BMC",
                 isOn: $allowUntrustedSSL
             )
-            Divider().background(Color.white.opacity(0.10))
             toggleRow(
                 title: "Десктопный режим (Desktop UA)",
                 subtitle: "Предотвращает поломку вёрстки iDRAC / MegaRAC на iPhone",
                 isOn: $desktopMode
             )
-            Divider().background(Color.white.opacity(0.10))
             toggleRow(
                 title: "Автозаполнение логина и пароля",
                 subtitle: "Автоматически подставляет данные из Keychain на странице входа",
                 isOn: $autoFillLogin
             )
-            Divider().background(Color.white.opacity(0.10))
             toggleRow(
                 title: "Опрос Redfish API (питание, °C, статус)",
                 subtitle: "Показывает состояние железа прямо на карточке сервера",
                 isOn: $redfishEnabled
             )
         }
-        .padding(14)
-        .background(ServerGlassPanel(cornerRadius: 20))
-    }
-
-    private var saveButton: some View {
-        Button(action: save) {
-            Text(existing == nil ? "Добавить сервер" : "Сохранить изменения")
-                .font(.headline.weight(.bold))
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(ServerPalette.accentButtonGradient)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .strokeBorder(ServerPalette.glassAccentBorder, lineWidth: 1)
-                        )
-                )
-        }
-        .buttonStyle(RemotePressStyle())
-        .padding(.bottom, 24)
+        .listRowBackground(Color.white.opacity(0.07))
     }
 
     private func loadExistingProfile() {
@@ -1421,42 +1178,6 @@ struct ServerEditorSheet: View {
         }
     }
 
-    private func sectionTitle(_ title: String) -> some View {
-        Text(title.uppercased())
-            .font(.system(size: 11, weight: .bold))
-            .foregroundStyle(ServerPalette.iruCyan)
-    }
-
-    private func editorField(
-        label: String,
-        placeholder: String,
-        text: Binding<String>,
-        keyboard: UIKeyboardType = .default,
-        disableAutocap: Bool = false
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(label)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.68))
-            TextField(placeholder, text: text)
-                .keyboardType(keyboard)
-                .autocapitalization(disableAutocap ? .none : .sentences)
-                .disableAutocorrection(disableAutocap)
-                .font(.subheadline)
-                .foregroundStyle(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 11)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.black.opacity(0.32))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
-                        )
-                )
-        }
-    }
-
     private func toggleRow(title: String, subtitle: String, isOn: Binding<Bool>) -> some View {
         Toggle(isOn: isOn) {
             VStack(alignment: .leading, spacing: 2) {
@@ -1465,7 +1186,7 @@ struct ServerEditorSheet: View {
                     .foregroundStyle(.white)
                 Text(subtitle)
                     .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.56))
+                    .foregroundStyle(.secondary)
             }
         }
         .tint(ServerPalette.iruCyan)
@@ -1660,18 +1381,12 @@ struct ServerWebConsoleView: View {
                 .padding(.vertical, 8)
                 .background(Color(red: 0.03, green: 0.05, blue: 0.10))
 
-                // Индикатор загрузки
+                // Нативный линейный индикатор загрузки
                 if controller.isLoading {
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Color.white.opacity(0.08)
-                            Rectangle()
-                                .fill(ServerPalette.iruCyan)
-                                .frame(width: geo.size.width * CGFloat(max(0.08, controller.estimatedProgress)))
-                                .animation(.easeOut(duration: 0.2), value: controller.estimatedProgress)
-                        }
-                    }
-                    .frame(height: 2.5)
+                    ProgressView(value: min(max(controller.estimatedProgress, 0.08), 1.0))
+                        .progressViewStyle(.linear)
+                        .tint(ServerPalette.iruCyan)
+                        .frame(height: 2.5)
                 }
 
                 // Область WebView или баннер ошибки подключения
@@ -1685,38 +1400,23 @@ struct ServerWebConsoleView: View {
                     .ignoresSafeArea(edges: .bottom)
 
                     if let loadError = controller.lastLoadError {
-                        VStack(spacing: 14) {
-                            Image(systemName: "wifi.exclamationmark")
-                                .font(.system(size: 36, weight: .bold))
-                                .foregroundStyle(ServerPalette.warnAmber)
-                            Text("Не удалось открыть веб-панель")
-                                .font(.headline.weight(.bold))
-                                .foregroundStyle(.white)
-                            Text(loadError)
-                                .font(.caption)
-                                .foregroundStyle(.white.opacity(0.68))
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 24)
-                            Text("Убедитесь, что вы подключены к локальной Wi-Fi сети или включили Kerio VPN.")
-                                .font(.caption2)
-                                .foregroundStyle(.white.opacity(0.55))
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 24)
+                        NativeEmptyStateView(
+                            title: "Не удалось открыть веб-панель",
+                            systemImage: "wifi.exclamationmark",
+                            description: "\(loadError)\nУбедитесь, что вы подключены к локальной Wi-Fi сети или включили Kerio VPN."
+                        ) {
                             Button {
                                 Haptics.medium()
                                 controller.reload()
                             } label: {
-                                Text("Повторить")
+                                Label("Повторить", systemImage: "arrow.clockwise")
                                     .font(.subheadline.weight(.bold))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 24)
-                                    .padding(.vertical, 10)
-                                    .background(Capsule().fill(ServerPalette.accentButtonGradient))
                             }
-                            .buttonStyle(RemotePressStyle())
+                            .nativeGlassButton(prominent: true, tint: ServerPalette.dellBlue)
+                            .controlSize(.large)
                         }
-                        .padding(24)
-                        .background(ServerGlassPanel(cornerRadius: 22))
+                        .padding(20)
+                        .background(ServerGlassPanel(cornerRadius: 24))
                         .padding(20)
                     }
                 }
@@ -1737,52 +1437,25 @@ struct ServerWebConsoleView: View {
                     }
                     if controller.jsDialogKind == .prompt {
                         TextField("Введите значение", text: $controller.jsPromptText)
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
-                            .font(.subheadline)
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color.black.opacity(0.35))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                            .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
-                                    )
-                            )
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled(true)
+                            .textFieldStyle(.roundedBorder)
                     }
-                    HStack(spacing: 10) {
-                        if controller.jsDialogKind == .confirm || controller.jsDialogKind == .prompt {
-                            Button {
-                                controller.completeJSDialog(accepted: false)
-                            } label: {
-                                Text("Отмена")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(.white.opacity(0.85))
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 11)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                            .fill(Color.white.opacity(0.10))
-                                    )
-                            }
-                            .buttonStyle(RemotePressStyle())
-                        }
-                        Button {
-                            controller.completeJSDialog(accepted: true)
-                        } label: {
-                            Text("ОК")
-                                .font(.subheadline.weight(.bold))
-                                .foregroundStyle(.white)
+                    NativeGlassContainer(spacing: 10) {
+                        HStack(spacing: 10) {
+                            if controller.jsDialogKind == .confirm || controller.jsDialogKind == .prompt {
+                                Button("Отмена") {
+                                    controller.completeJSDialog(accepted: false)
+                                }
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, 11)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(ServerPalette.accentButtonGradient)
-                                )
+                                .nativeGlassButton(prominent: false)
+                            }
+                            Button("ОК") {
+                                controller.completeJSDialog(accepted: true)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .nativeGlassButton(prominent: true, tint: ServerPalette.dellBlue)
                         }
-                        .buttonStyle(RemotePressStyle())
                     }
                 }
                 .padding(20)

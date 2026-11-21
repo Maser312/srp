@@ -101,14 +101,33 @@ struct SberLiquidBackdrop: View {
     }
 }
 
-/// Стеклянная панель в стиле Liquid Glass с матовым размытием, верхним бликом и тонкой градиентной кромкой.
+/// Стеклянная панель в стиле Liquid Glass (на iOS 26–27 — нативный `.glassEffect`).
 struct LiquidGlassPanel: View {
     var cornerRadius: CGFloat = 22
     var highlighted: Bool = false
     var tint: Color = SberPalette.teal
+    var interactive: Bool = false
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            Color.clear
+                .glassEffect(
+                    highlighted
+                        ? (interactive ? .regular.tint(SberPalette.brightGreen.opacity(0.65)).interactive() : .regular.tint(SberPalette.brightGreen.opacity(0.65)))
+                        : (interactive ? .regular.tint(tint.opacity(0.08)).interactive() : .regular.tint(tint.opacity(0.08))),
+                    in: shape
+                )
+        } else {
+            legacyBody(shape: shape)
+        }
+        #else
+        legacyBody(shape: shape)
+        #endif
+    }
+
+    private func legacyBody(shape: RoundedRectangle) -> some View {
         ZStack {
             shape.fill(.ultraThinMaterial)
 
@@ -128,11 +147,9 @@ struct LiquidGlassPanel: View {
                 )
             }
 
-            // Верхний стеклянный блик
             shape.fill(SberPalette.specularSheen)
                 .opacity(highlighted ? 0.55 : 0.75)
 
-            // Тонкая переливающаяся рамка Liquid Glass
             shape.strokeBorder(
                 highlighted ? SberPalette.glassAccentBorder : SberPalette.glassBorderGradient,
                 lineWidth: highlighted ? 1.25 : 1.0
@@ -142,12 +159,30 @@ struct LiquidGlassPanel: View {
     }
 }
 
-/// Круглая стеклянная кнопка в стиле Liquid Glass.
+/// Круглая стеклянная кнопка в стиле Liquid Glass (на iOS 26–27 — нативный интерактивный `.glassEffect`).
 struct LiquidGlassCircle: View {
     var highlighted: Bool = false
     var accent: Bool = false
 
     var body: some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            Color.clear
+                .glassEffect(
+                    (accent || highlighted)
+                        ? .regular.tint(SberPalette.brightGreen.opacity(accent ? 0.72 : 0.45)).interactive()
+                        : .regular.interactive(),
+                    in: Circle()
+                )
+        } else {
+            legacyBody
+        }
+        #else
+        legacyBody
+        #endif
+    }
+
+    private var legacyBody: some View {
         ZStack {
             Circle().fill(.ultraThinMaterial)
 
@@ -186,11 +221,29 @@ struct LiquidGlassCircle: View {
     }
 }
 
-/// Стеклянная кнопка-капсула с фирменным градиентом Сбера (для главных CTA в листах).
+/// Стеклянная кнопка-капсула с фирменным акцентом Сбера (на iOS 26–27 — нативный `.glassEffect`).
 struct SberPrimaryButtonStyle: ButtonStyle {
     var disabled: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            configuration.label
+                .foregroundStyle(.white)
+                .glassEffect(
+                    .regular.tint(SberPalette.green.opacity(disabled ? 0.25 : 0.80)).interactive(!disabled),
+                    in: Capsule()
+                )
+                .opacity(disabled ? 0.55 : 1.0)
+        } else {
+            legacyBody(configuration: configuration)
+        }
+        #else
+        legacyBody(configuration: configuration)
+        #endif
+    }
+
+    private func legacyBody(configuration: Configuration) -> some View {
         configuration.label
             .foregroundStyle(.white)
             .background(
@@ -216,6 +269,20 @@ struct SberGlassButtonStyle: ButtonStyle {
     var disabled: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            configuration.label
+                .foregroundStyle(Color.white.opacity(disabled ? 0.38 : 0.94))
+                .glassEffect(.regular.interactive(!disabled), in: Capsule())
+        } else {
+            legacyBody(configuration: configuration)
+        }
+        #else
+        legacyBody(configuration: configuration)
+        #endif
+    }
+
+    private func legacyBody(configuration: Configuration) -> some View {
         configuration.label
             .foregroundStyle(Color.white.opacity(disabled ? 0.38 : 0.92))
             .background(LiquidGlassPanel(cornerRadius: 14, highlighted: false))

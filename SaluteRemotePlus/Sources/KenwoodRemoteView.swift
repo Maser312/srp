@@ -117,6 +117,24 @@ struct KenwoodGlassPanel: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            Color.clear
+                .glassEffect(
+                    highlighted
+                        ? .regular.tint(KenwoodPalette.crimson.opacity(0.72))
+                        : .regular.tint((accentGlow ?? KenwoodPalette.crimson).opacity(0.08)),
+                    in: shape
+                )
+        } else {
+            legacyBody(shape: shape)
+        }
+        #else
+        legacyBody(shape: shape)
+        #endif
+    }
+
+    private func legacyBody(shape: RoundedRectangle) -> some View {
         ZStack {
             shape.fill(.ultraThinMaterial)
 
@@ -152,6 +170,24 @@ struct KenwoodGlassCircle: View {
     var accent: Bool = false
 
     var body: some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            Color.clear
+                .glassEffect(
+                    (accent || highlighted)
+                        ? .regular.tint(KenwoodPalette.crimson.opacity(accent ? 0.80 : 0.55)).interactive()
+                        : .regular.interactive(),
+                    in: Circle()
+                )
+        } else {
+            legacyBody
+        }
+        #else
+        legacyBody
+        #endif
+    }
+
+    private var legacyBody: some View {
         ZStack {
             Circle().fill(.ultraThinMaterial)
 
@@ -186,26 +222,44 @@ struct KenwoodPrimaryButtonStyle: ButtonStyle {
     var disabled: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
         configuration.label
             .foregroundStyle(.white.opacity(disabled ? 0.45 : 1.0))
-            .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(KenwoodPalette.accentButtonGradient)
-                        .opacity(disabled ? 0.25 : 1.0)
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(KenwoodPalette.specularSheen)
-                        .opacity(disabled ? 0.2 : 0.7)
-                }
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(KenwoodPalette.glassAccentBorder, lineWidth: 1)
-                    .opacity(disabled ? 0.3 : 0.95)
-            )
-            .shadow(color: disabled ? .clear : KenwoodPalette.crimson.opacity(0.38), radius: 10, y: 4)
+            .background(primaryBackground(shape: shape))
+            .shadow(color: disabled ? .clear : KenwoodPalette.crimson.opacity(0.36), radius: 10, y: 4)
             .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+
+    @ViewBuilder
+    private func primaryBackground(shape: RoundedRectangle) -> some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            Color.clear
+                .glassEffect(
+                    .regular.tint(KenwoodPalette.crimson.opacity(disabled ? 0.25 : 0.78)).interactive(),
+                    in: shape
+                )
+        } else {
+            legacyPrimaryBackground(shape: shape)
+        }
+        #else
+        legacyPrimaryBackground(shape: shape)
+        #endif
+    }
+
+    private func legacyPrimaryBackground(shape: RoundedRectangle) -> some View {
+        ZStack {
+            shape
+                .fill(KenwoodPalette.accentButtonGradient)
+                .opacity(disabled ? 0.25 : 1.0)
+            shape
+                .fill(KenwoodPalette.specularSheen)
+                .opacity(disabled ? 0.2 : 0.7)
+            shape
+                .strokeBorder(KenwoodPalette.glassAccentBorder, lineWidth: 1)
+                .opacity(disabled ? 0.3 : 0.95)
+        }
     }
 }
 
@@ -863,35 +917,12 @@ struct KenwoodRemoteView: View {
 
     private var audioTabContent: some View {
         VStack(spacing: 14) {
-            HStack(spacing: 4) {
+            Picker("Раздел звука", selection: $audioSubtab) {
                 ForEach(KenwoodAudioSubtab.allCases) { sub in
-                    let active = sub == audioSubtab
-                    Button {
-                        Haptics.tap()
-                        withAnimation(.easeInOut(duration: 0.16)) {
-                            audioSubtab = sub
-                        }
-                    } label: {
-                        Text(sub.title)
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(active ? .white : .white.opacity(0.62))
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 34)
-                            .background(
-                                Group {
-                                    if active {
-                                        Capsule()
-                                            .fill(KenwoodPalette.accentButtonGradient)
-                                            .overlay(Capsule().strokeBorder(KenwoodPalette.glassAccentBorder, lineWidth: 1))
-                                    }
-                                }
-                            )
-                    }
-                    .buttonStyle(.plain)
+                    Text(sub.title).tag(sub)
                 }
             }
-            .padding(4)
-            .background(KenwoodGlassPanel(cornerRadius: 20))
+            .pickerStyle(.segmented)
 
             switch audioSubtab {
             case .eq:
@@ -1900,137 +1931,129 @@ private struct KenwoodConnectionSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        ZStack {
-            KenwoodLiquidBackdrop(glowColor: glowColor)
+        NativeNavigationContainer {
+            ZStack {
+                KenwoodLiquidBackdrop(glowColor: glowColor)
 
-            VStack(spacing: 16) {
-                Capsule()
-                    .fill(.white.opacity(0.24))
-                    .frame(width: 40, height: 4)
-                    .padding(.top, 10)
-
-                HStack(spacing: 6) {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 10, weight: .black))
-                        .foregroundStyle(KenwoodPalette.neonRed)
-                        .rotationEffect(.degrees(-90))
-                    Text("ПОДКЛЮЧЕНИЕ KENWOOD")
-                        .font(.headline.weight(.black))
-                        .foregroundStyle(.white)
-                }
-
-                HStack(spacing: 10) {
-                    Circle()
-                        .fill(kenwood.isConnected ? KenwoodPalette.cyan : KenwoodPalette.amber)
-                        .frame(width: 10, height: 10)
-                    Text(kenwood.bluetoothStateText ?? kenwood.statusText)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.88))
-                    Spacer()
-                    if kenwood.isScanning {
-                        ProgressView().tint(KenwoodPalette.neonRed)
+                VStack(spacing: 14) {
+                    HStack(spacing: 10) {
+                        Circle()
+                            .fill(kenwood.isConnected ? KenwoodPalette.cyan : KenwoodPalette.amber)
+                            .frame(width: 10, height: 10)
+                        Text(kenwood.bluetoothStateText ?? kenwood.statusText)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.white.opacity(0.88))
+                        Spacer()
+                        if kenwood.isScanning {
+                            ProgressView().tint(KenwoodPalette.neonRed)
+                        }
                     }
-                }
-                .padding(14)
-                .background(KenwoodGlassPanel(cornerRadius: 18))
+                    .padding(14)
+                    .background(KenwoodGlassPanel(cornerRadius: 18))
 
-                HStack(spacing: 10) {
-                    Button {
-                        Haptics.tap()
-                        kenwood.refreshDevices()
-                    } label: {
-                        Label("Искать", systemImage: "arrow.clockwise")
-                            .font(.subheadline.weight(.bold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                    }
-                    .buttonStyle(KenwoodPrimaryButtonStyle())
-
-                    Button {
-                        Haptics.tap()
-                        kenwood.showSystemBluetoothPicker()
-                    } label: {
-                        Label("Выбрать BT", systemImage: "antenna.radiowaves.left.and.right")
-                            .font(.subheadline.weight(.semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                    }
-                    .buttonStyle(KenwoodGlassButtonStyle())
-                }
-
-                if kenwood.isConnected {
-                    Button {
-                        Haptics.tap()
-                        kenwood.disconnect()
-                    } label: {
-                        Text("Отключиться от \(kenwood.connectedDeviceName ?? "KENWOOD")")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(KenwoodPalette.neonRed)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(KenwoodGlassPanel(cornerRadius: 16))
-                    }
-                    .buttonStyle(RemotePressStyle())
-                }
-
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 10) {
-                        if kenwood.discoveredDevices.isEmpty {
-                            VStack(spacing: 8) {
-                                Image(systemName: "car.fill")
-                                    .font(.title2)
-                                    .foregroundStyle(KenwoodPalette.brandGradient)
-                                Text("Ресивер KENWOOD не обнаружен")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(.white)
-                                Text("Подключите iPhone к магнитоле в «Настройках → Bluetooth» или по кабелю USB, затем нажмите «Искать».")
-                                    .font(.caption)
-                                    .foregroundStyle(.white.opacity(0.58))
-                                    .multilineTextAlignment(.center)
+                    NativeGlassContainer(spacing: 10) {
+                        HStack(spacing: 10) {
+                            Button {
+                                Haptics.tap()
+                                kenwood.refreshDevices()
+                            } label: {
+                                Label("Искать", systemImage: "arrow.clockwise")
+                                    .font(.subheadline.weight(.bold))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 4)
                             }
-                            .frame(maxWidth: .infinity)
-                            .padding(22)
-                            .background(KenwoodGlassPanel(cornerRadius: 20))
-                        } else {
-                            ForEach(kenwood.discoveredDevices) { device in
-                                Button {
-                                    Haptics.medium()
-                                    kenwood.connect(to: device)
-                                    dismiss()
-                                } label: {
-                                    HStack(spacing: 12) {
-                                        Image(systemName: "car.fill")
-                                            .font(.title3)
-                                            .foregroundStyle(KenwoodPalette.neonRed)
-                                            .frame(width: 42, height: 42)
-                                            .background(KenwoodGlassCircle())
+                            .nativeGlassButton(prominent: true, tint: KenwoodPalette.crimson)
+                            .controlSize(.large)
 
-                                        VStack(alignment: .leading, spacing: 3) {
-                                            Text(device.name)
-                                                .font(.subheadline.weight(.bold))
-                                                .foregroundStyle(.white)
-                                            Text("\(device.transport.rawValue) · \(device.detail)")
-                                                .font(.caption2)
-                                                .foregroundStyle(KenwoodPalette.iceBlue)
-                                        }
-                                        Spacer()
-                                        Image(systemName: "chevron.right")
-                                            .font(.caption.bold())
-                                            .foregroundStyle(.white.opacity(0.45))
-                                    }
-                                    .padding(14)
-                                    .background(KenwoodGlassPanel(cornerRadius: 18))
+                            Button {
+                                Haptics.tap()
+                                kenwood.showSystemBluetoothPicker()
+                            } label: {
+                                Label("Выбрать BT", systemImage: "antenna.radiowaves.left.and.right")
+                                    .font(.subheadline.weight(.semibold))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 4)
+                            }
+                            .nativeGlassButton(prominent: false)
+                            .controlSize(.large)
+                        }
+                    }
+
+                    if kenwood.isConnected {
+                        Button(role: .destructive) {
+                            Haptics.tap()
+                            kenwood.disconnect()
+                        } label: {
+                            Text("Отключиться от \(kenwood.connectedDeviceName ?? "KENWOOD")")
+                                .font(.subheadline.weight(.semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 3)
+                        }
+                        .nativeGlassButton(prominent: false, tint: KenwoodPalette.neonRed)
+                    }
+
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 10) {
+                            if kenwood.discoveredDevices.isEmpty {
+                                NativeEmptyStateView(
+                                    title: "Ресивер KENWOOD не обнаружен",
+                                    systemImage: "car.fill",
+                                    description: "Подключите iPhone к магнитоле в «Настройках → Bluetooth» или по кабелю USB, затем нажмите «Искать»."
+                                ) {
+                                    EmptyView()
                                 }
-                                .buttonStyle(RemotePressStyle())
+                                .padding(12)
+                                .background(KenwoodGlassPanel(cornerRadius: 20))
+                            } else {
+                                ForEach(kenwood.discoveredDevices) { device in
+                                    Button {
+                                        Haptics.medium()
+                                        kenwood.connect(to: device)
+                                        dismiss()
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            Image(systemName: "car.fill")
+                                                .font(.title3)
+                                                .foregroundStyle(KenwoodPalette.neonRed)
+                                                .frame(width: 42, height: 42)
+                                                .background(KenwoodGlassCircle())
+
+                                            VStack(alignment: .leading, spacing: 3) {
+                                                Text(device.name)
+                                                    .font(.subheadline.weight(.bold))
+                                                    .foregroundStyle(.white)
+                                                Text("\(device.transport.rawValue) · \(device.detail)")
+                                                    .font(.caption2)
+                                                    .foregroundStyle(KenwoodPalette.iceBlue)
+                                            }
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                                .font(.caption.bold())
+                                                .foregroundStyle(.white.opacity(0.45))
+                                        }
+                                        .padding(14)
+                                        .background(KenwoodGlassPanel(cornerRadius: 18))
+                                    }
+                                    .buttonStyle(RemotePressStyle())
+                                }
                             }
                         }
                     }
-                }
 
-                Spacer(minLength: 8)
+                    Spacer(minLength: 8)
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 8)
             }
-            .padding(.horizontal, 20)
+            .navigationTitle("Подключение KENWOOD")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Готово") { dismiss() }
+                }
+            }
         }
+        .nativePresentationSheet()
         .preferredColorScheme(.dark)
         .onAppear {
             kenwood.refreshDevices()

@@ -25,16 +25,9 @@ struct ServerDiscoverySheet: View {
     }
 
     var body: some View {
-        ZStack {
-            ServerLiquidBackdrop()
-
-            VStack(spacing: 0) {
-                Capsule()
-                    .fill(Color.white.opacity(0.24))
-                    .frame(width: 40, height: 4)
-                    .padding(.top, 10)
-
-                headerBar
+        NativeNavigationContainer {
+            ZStack {
+                ServerLiquidBackdrop()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 14) {
@@ -49,10 +42,30 @@ struct ServerDiscoverySheet: View {
                         Spacer(minLength: 24)
                     }
                     .padding(.horizontal, 16)
-                    .padding(.top, 6)
+                    .padding(.top, 8)
+                }
+            }
+            .navigationTitle("Поиск iDRAC / BMC")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Закрыть") {
+                        manager.stopNetworkScan()
+                        dismiss()
+                    }
+                }
+
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Text(manager.networkRoute.shortBadge)
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(ServerPalette.bgTop)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(manager.networkRoute.indicatorColor))
                 }
             }
         }
+        .nativePresentationSheet()
         .preferredColorScheme(.dark)
         .onAppear {
             manager.refreshSuggestedSubnets()
@@ -63,36 +76,6 @@ struct ServerDiscoverySheet: View {
         .onDisappear {
             manager.stopNetworkScan()
         }
-    }
-
-    // MARK: - Заголовок
-
-    private var headerBar: some View {
-        HStack {
-            Button("Закрыть") {
-                manager.stopNetworkScan()
-                dismiss()
-            }
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(.white.opacity(0.70))
-
-            Spacer()
-
-            Text("Поиск iDRAC / BMC")
-                .font(.headline.weight(.bold))
-                .foregroundStyle(.white)
-
-            Spacer()
-
-            Text(manager.networkRoute.shortBadge)
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(ServerPalette.bgTop)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Capsule().fill(manager.networkRoute.indicatorColor))
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 14)
     }
 
     // MARK: - Настройка подсети и запуск сканера
@@ -172,29 +155,19 @@ struct ServerDiscoverySheet: View {
                     manager.startNetworkScan(subnetInput: subnetInput, includeHTTP: includeHTTP)
                 }
             } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: manager.isScanningNetwork ? "stop.fill" : "dot.radiowaves.left.and.right")
-                        .font(.subheadline.weight(.bold))
-                    Text(manager.isScanningNetwork ? "Остановить сканирование" : "Найти iDRAC и iRU BMC")
-                        .font(.subheadline.weight(.bold))
-                }
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 13)
-                .background(
-                    RoundedRectangle(cornerRadius: 15, style: .continuous)
-                        .fill(
-                            manager.isScanningNetwork
-                                ? LinearGradient(colors: [ServerPalette.dangerRed, ServerPalette.dangerRed.opacity(0.75)], startPoint: .leading, endPoint: .trailing)
-                                : ServerPalette.accentButtonGradient
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 15, style: .continuous)
-                                .strokeBorder(ServerPalette.glassAccentBorder, lineWidth: 1)
-                        )
+                Label(
+                    manager.isScanningNetwork ? "Остановить сканирование" : "Найти iDRAC и iRU BMC",
+                    systemImage: manager.isScanningNetwork ? "stop.fill" : "dot.radiowaves.left.and.right"
                 )
+                .font(.subheadline.weight(.bold))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
             }
-            .buttonStyle(RemotePressStyle())
+            .nativeGlassButton(
+                prominent: true,
+                tint: manager.isScanningNetwork ? ServerPalette.dangerRed : ServerPalette.dellBlue
+            )
+            .controlSize(.large)
         }
         .padding(14)
         .background(ServerGlassPanel(cornerRadius: 20, accentGlow: ServerPalette.iruCyan))
@@ -219,15 +192,9 @@ struct ServerDiscoverySheet: View {
                     .foregroundStyle(ServerPalette.iruCyan)
             }
 
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.white.opacity(0.10))
-                    Capsule()
-                        .fill(ServerPalette.accentButtonGradient)
-                        .frame(width: geo.size.width * min(max(manager.scanProgress, 0.02), 1.0))
-                }
-            }
-            .frame(height: 6)
+            ProgressView(value: min(max(manager.scanProgress, 0.0), 1.0))
+                .progressViewStyle(.linear)
+                .tint(ServerPalette.iruCyan)
         }
         .padding(13)
         .background(ServerGlassPanel(cornerRadius: 16))
@@ -249,17 +216,14 @@ struct ServerDiscoverySheet: View {
 
             if visibleResults.isEmpty {
                 if !manager.isScanningNetwork && manager.discoveredBMCs.isEmpty {
-                    VStack(spacing: 8) {
-                        Image(systemName: "magnifyingglass.circle")
-                            .font(.system(size: 30))
-                            .foregroundStyle(ServerPalette.iruCyan.opacity(0.75))
-                        Text("Сканер определяет Dell iDRAC (7/8/9), iRU AMI MegaRAC и OpenBMC по Redfish и заголовкам веб-интерфейса. Работает как по локальному Wi-Fi, так и через Kerio VPN.")
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.62))
-                            .multilineTextAlignment(.center)
+                    NativeEmptyStateView(
+                        title: "Поиск контроллеров в сети",
+                        systemImage: "magnifyingglass.circle",
+                        description: "Сканер определяет Dell iDRAC (7/8/9), iRU AMI MegaRAC и OpenBMC по Redfish и заголовкам веб-интерфейса. Работает как по локальному Wi-Fi, так и через Kerio VPN."
+                    ) {
+                        EmptyView()
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(18)
+                    .padding(12)
                     .background(ServerGlassPanel(cornerRadius: 18))
                 } else if !manager.isScanningNetwork && otherHostsCount > 0 && !showAllWebHosts {
                     Text("Подтверждённые iDRAC/BMC не обнаружены, но найдено \(otherHostsCount) веб-хостов — включите переключатель выше, чтобы увидеть их.")
@@ -365,16 +329,9 @@ struct ServerDiscoverySheet: View {
                 } label: {
                     Text("Сохранить")
                         .font(.caption.weight(.bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(
-                            Capsule()
-                                .fill(ServerPalette.accentButtonGradient)
-                                .overlay(Capsule().strokeBorder(ServerPalette.glassAccentBorder, lineWidth: 1))
-                        )
                 }
-                .buttonStyle(RemotePressStyle())
+                .nativeGlassButton(prominent: true, tint: ServerPalette.dellBlue)
+                .controlSize(.small)
             }
         }
         .padding(13)

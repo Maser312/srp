@@ -506,7 +506,7 @@ enum ServerReachability: Equatable, Sendable {
         switch self {
         case .unknown: return "Не проверялся"
         case .checking: return "Проверка…"
-        case .online(let ms): return "Онлайн · \(ms) мс"
+        case .online(let ms): return "BMC онлайн · \(ms) мс"
         case .offline(let reason): return reason
         }
     }
@@ -515,6 +515,7 @@ enum ServerReachability: Equatable, Sendable {
 struct ServerTelemetry: Equatable, Sendable {
     var reachability: ServerReachability = .unknown
     var powerState: String?
+    var systemState: String?
     var health: String?
     var model: String?
     var manufacturer: String?
@@ -547,6 +548,75 @@ struct ServerTelemetry: Equatable, Sendable {
         if state == "on" { return true }
         if state == "off" { return false }
         return nil
+    }
+
+    var powerStatusTitle: String? {
+        guard let raw = powerState?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
+            return nil
+        }
+        switch raw.lowercased() {
+        case "on": return "Работает"
+        case "off": return "Выключен"
+        case "poweringon": return "Запускается…"
+        case "poweringoff": return "Выключается…"
+        case "paused": return "Пауза"
+        default: return raw
+        }
+    }
+
+    var powerStatusSymbol: String {
+        switch powerState?.lowercased() {
+        case "on": return "power"
+        case "off": return "power.circle"
+        case "poweringon": return "bolt.circle.fill"
+        case "poweringoff": return "power.circle.fill"
+        case "paused": return "pause.circle.fill"
+        default: return "power"
+        }
+    }
+
+    var powerStatusColor: Color {
+        switch powerState?.lowercased() {
+        case "on": return Color(red: 0.14, green: 0.88, blue: 0.60)
+        case "off": return Color(red: 1.00, green: 0.34, blue: 0.38)
+        case "poweringon": return Color(red: 0.08, green: 0.78, blue: 0.96)
+        case "poweringoff", "paused": return Color(red: 1.00, green: 0.72, blue: 0.22)
+        default: return .white.opacity(0.65)
+        }
+    }
+
+    var healthTitle: String? {
+        guard let raw = health?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
+            return nil
+        }
+        switch raw.lowercased() {
+        case "ok": return "Исправен"
+        case "warning": return "Предупреждение"
+        case "critical": return "Критично"
+        default: return raw
+        }
+    }
+
+    var systemStateTitle: String? {
+        guard let raw = systemState?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
+            return nil
+        }
+        switch raw.lowercased() {
+        case "enabled": return "Активен"
+        case "disabled": return "Отключён"
+        case "standbyoffline": return "Режим ожидания"
+        case "standbyspare": return "Резерв"
+        case "inTest".lowercased(): return "Самотестирование"
+        case "starting": return "Загрузка"
+        case "absent": return "Отсутствует"
+        case "unavailableoffline": return "Недоступен"
+        case "deferring": return "Ожидание"
+        case "quiesced": return "Приостановлен"
+        case "updating": return "Обновление"
+        case "qualified": return "Проверен"
+        case "degraded": return "Деградация"
+        default: return raw
+        }
     }
 
     var isLocatorLit: Bool {

@@ -93,7 +93,10 @@ final class ServerManager: ObservableObject {
         self.requireBiometricLock = lockEnabled
         self.isUnlocked = !lockEnabled
         loadProfiles()
-        refreshSuggestedSubnets()
+    }
+
+    var isMonitoring: Bool {
+        monitorStarted
     }
 
     var onlineCount: Int {
@@ -957,6 +960,7 @@ final class ServerManager: ObservableObject {
 
         if let statusDict = sysDict["Status"] as? [String: Any] {
             result.health = (statusDict["HealthRollup"] as? String) ?? (statusDict["Health"] as? String)
+            result.systemState = statusDict["State"] as? String
         }
         if let proc = sysDict["ProcessorSummary"] as? [String: Any],
            let count = proc["Count"] as? Int {
@@ -1114,8 +1118,11 @@ final class ServerManager: ObservableObject {
                         caps.usesLocationIndicatorActive = true
                     }
                 }
-                if result.health == nil, let st = ch["Status"] as? [String: Any] {
+                if result.health == nil, let st = chassisDict?["Status"] as? [String: Any] {
                     result.health = (st["HealthRollup"] as? String) ?? (st["Health"] as? String)
+                }
+                if result.systemState == nil, let st = chassisDict?["Status"] as? [String: Any] {
+                    result.systemState = st["State"] as? String
                 }
             }
 

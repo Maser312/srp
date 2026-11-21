@@ -83,40 +83,96 @@ struct ServerControlView: View {
     }
 
     var body: some View {
-        ZStack {
-            ServerLiquidBackdrop()
+        NativeNavigationContainer {
+            ZStack {
+                ServerLiquidBackdrop()
 
-            VStack(spacing: 0) {
-                topBar
+                VStack(spacing: 0) {
+                    if availableTabs.count > 1 {
+                        tabBar
+                            .padding(.horizontal, 16)
+                            .padding(.top, 6)
+                            .padding(.bottom, 10)
+                    }
 
-                if availableTabs.count > 1 {
-                    tabBar
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 14) {
+                            bmcIdentityCard
+
+                            switch selectedTab {
+                            case .controls:
+                                controlsTabContent
+                            case .sensors:
+                                sensorsTabContent
+                            case .logs:
+                                logsTabContent
+                            }
+
+                            Spacer(minLength: 28)
+                        }
                         .padding(.horizontal, 16)
-                        .padding(.bottom, 10)
+                        .padding(.top, 4)
+                    }
+                    .refreshable {
+                        await manager.checkServer(liveServer, deepProbe: true)
+                        if selectedTab == .sensors {
+                            await manager.loadDetailedSensors(for: liveServer)
+                        } else if selectedTab == .logs, let svc = activeLogService {
+                            await manager.loadLogs(for: liveServer, service: svc)
+                        }
+                    }
                 }
 
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 14) {
-                        bmcIdentityCard
-
-                        switch selectedTab {
-                        case .controls:
-                            controlsTabContent
-                        case .sensors:
-                            sensorsTabContent
-                        case .logs:
-                            logsTabContent
-                        }
-
-                        Spacer(minLength: 28)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 4)
+                if let notice = manager.actionNotice {
+                    noticeOverlay(notice)
                 }
             }
+            .navigationTitle(liveServer.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        Haptics.light()
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.body.weight(.semibold))
+                    }
+                    .accessibilityLabel("Закрыть")
+                }
 
-            if let notice = manager.actionNotice {
-                noticeOverlay(notice)
+                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    Button {
+                        Haptics.light()
+                        Task {
+                            isProbingBMC = true
+                            await manager.checkServer(liveServer, deepProbe: true)
+                            isProbingBMC = false
+                            if selectedTab == .logs, let svc = activeLogService {
+                                await manager.loadLogs(for: liveServer, service: svc)
+                            }
+                        }
+                    } label: {
+                        if isProbingBMC {
+                            ProgressView()
+                                .tint(ServerPalette.iruCyan)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                    }
+                    .accessibilityLabel("Обновить")
+
+                    Button {
+                        Haptics.medium()
+                        dismiss()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
+                            onOpenWebConsole()
+                        }
+                    } label: {
+                        Label("Веб", systemImage: "globe")
+                    }
+                    .tint(ServerPalette.iruCyan)
+                }
             }
         }
         .preferredColorScheme(.dark)
@@ -209,129 +265,15 @@ struct ServerControlView: View {
         }
     }
 
-    // MARK: - Шапка и адаптивные вкладки
-
-    private var topBar: some View {
-        HStack(spacing: 10) {
-            Button {
-                Haptics.light()
-                dismiss()
-            } label: {
-                ZStack {
-                    ServerGlassCircle()
-                    Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white)
-                }
-                .frame(width: 38, height: 38)
-            }
-            .buttonStyle(RemotePressStyle())
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(liveServer.name)
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                Text(liveServer.displayAddress)
-                    .font(.system(.caption2, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.62))
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 4)
-
-            Button {
-                Haptics.light()
-                Task {
-                    isProbingBMC = true
-                    await manager.checkServer(liveServer, deepProbe: true)
-                    isProbingBMC = false
-                    if selectedTab == .logs, let svc = activeLogService {
-                        await manager.loadLogs(for: liveServer, service: svc)
-                    }
-                }
-            } label: {
-                ZStack {
-                    ServerGlassCircle()
-                    if isProbingBMC {
-                        ProgressView()
-                            .tint(ServerPalette.iruCyan)
-                            .scaleEffect(0.75)
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
-                }
-                .frame(width: 38, height: 38)
-            }
-            .buttonStyle(RemotePressStyle())
-
-            Button {
-                Haptics.medium()
-                dismiss()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
-                    onOpenWebConsole()
-                }
-            } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: "globe")
-                        .font(.caption.weight(.bold))
-                    Text("Веб")
-                        .font(.caption.weight(.bold))
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
-                .background(
-                    Capsule()
-                        .fill(ServerPalette.accentButtonGradient)
-                        .overlay(Capsule().strokeBorder(ServerPalette.glassAccentBorder, lineWidth: 1))
-                )
-            }
-            .buttonStyle(RemotePressStyle())
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 10)
-    }
+    // MARK: - Нативный переключатель вкладок (Liquid Glass Segmented Picker iOS 26–27)
 
     private var tabBar: some View {
-        HStack(spacing: 6) {
+        Picker("Раздел", selection: $selectedTab) {
             ForEach(availableTabs) { tab in
-                let isSelected = (selectedTab == tab)
-                Button {
-                    Haptics.light()
-                    withAnimation(.easeInOut(duration: 0.18)) {
-                        selectedTab = tab
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: tab.symbol)
-                            .font(.system(size: 12, weight: .bold))
-                        Text(tab.title)
-                            .font(.caption.weight(.bold))
-                    }
-                    .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.62))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 9)
-                    .background(
-                        RoundedRectangle(cornerRadius: 13, style: .continuous)
-                            .fill(isSelected ? liveServer.vendor.accentColor.opacity(0.45) : Color.clear)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                                    .strokeBorder(
-                                        isSelected ? ServerPalette.glassAccentBorder : LinearGradient(colors: [.clear], startPoint: .top, endPoint: .bottom),
-                                        lineWidth: 1
-                                    )
-                            )
-                    )
-                }
-                .buttonStyle(RemotePressStyle())
+                Text(tab.title).tag(tab)
             }
         }
-        .padding(4)
-        .background(ServerGlassPanel(cornerRadius: 16))
+        .pickerStyle(.segmented)
     }
 
     // MARK: - Карточка автоопределённой версии iDRAC / BMC
@@ -375,19 +317,34 @@ struct ServerControlView: View {
 
                 Spacer(minLength: 4)
 
-                if let isOn = telemetry.isPoweredOn {
-                    statusPill(
-                        text: isOn ? "ВКЛ" : "ВЫКЛ",
-                        color: isOn ? ServerPalette.onlineGreen : ServerPalette.warnAmber
+                if let powerTitle = telemetry.powerStatusTitle {
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(telemetry.powerStatusColor)
+                            .frame(width: 7, height: 7)
+                            .shadow(color: telemetry.powerStatusColor.opacity(0.8), radius: 3)
+                        Text(powerTitle)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(telemetry.powerStatusColor)
+                    }
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule()
+                            .fill(telemetry.powerStatusColor.opacity(0.18))
+                            .overlay(Capsule().strokeBorder(telemetry.powerStatusColor.opacity(0.50), lineWidth: 0.9))
                     )
                 }
             }
 
-            if telemetry.biosVersion != nil || telemetry.serialNumber != nil || telemetry.cpuCount != nil || telemetry.memoryGiB != nil || telemetry.health != nil {
+            if telemetry.biosVersion != nil || telemetry.serialNumber != nil || telemetry.cpuCount != nil || telemetry.memoryGiB != nil || telemetry.health != nil || telemetry.systemState != nil {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 7) {
-                        if let health = telemetry.health {
-                            miniInfoChip(label: "Статус", value: health.uppercased(), tint: telemetry.healthColor)
+                        if let healthTitle = telemetry.healthTitle {
+                            miniInfoChip(label: "Здоровье", value: healthTitle, tint: telemetry.healthColor)
+                        }
+                        if let stateTitle = telemetry.systemStateTitle {
+                            miniInfoChip(label: "Состояние", value: stateTitle, tint: .white.opacity(0.90))
                         }
                         if let cpus = telemetry.cpuCount {
                             miniInfoChip(label: "CPU", value: "\(cpus)", tint: ServerPalette.iruCyan)
@@ -441,41 +398,40 @@ struct ServerControlView: View {
                 badge: "\(actions.count) доступно"
             )
 
-            LazyVGrid(columns: columns, spacing: 10) {
-                ForEach(actions) { action in
-                    Button {
-                        if action.requiresConfirmation {
-                            Haptics.medium()
-                            pendingPowerConfirm = ControlPowerConfirm(action: action)
-                        } else {
-                            Haptics.medium()
-                            Task { await manager.sendPowerAction(action, to: liveServer) }
+            NativeGlassContainer(spacing: 10) {
+                LazyVGrid(columns: columns, spacing: 10) {
+                    ForEach(actions) { action in
+                        Button {
+                            if action.requiresConfirmation {
+                                Haptics.medium()
+                                pendingPowerConfirm = ControlPowerConfirm(action: action)
+                            } else {
+                                Haptics.medium()
+                                Task { await manager.sendPowerAction(action, to: liveServer) }
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: action.symbol)
+                                    .font(.system(size: 15, weight: .bold))
+                                    .foregroundStyle(action.tintColor)
+                                    .frame(width: 24)
+                                Text(action.shortTitle)
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(.white)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 13)
+                            .nativeLiquidGlass(
+                                in: RoundedRectangle(cornerRadius: 15, style: .continuous),
+                                tint: action.tintColor.opacity(0.24),
+                                interactive: true
+                            )
                         }
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: action.symbol)
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(action.tintColor)
-                                .frame(width: 24)
-                            Text(action.shortTitle)
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(.white)
-                                .lineLimit(2)
-                                .multilineTextAlignment(.leading)
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 13)
-                        .background(
-                            RoundedRectangle(cornerRadius: 15, style: .continuous)
-                                .fill(action.tintColor.opacity(0.14))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 15, style: .continuous)
-                                        .strokeBorder(action.tintColor.opacity(0.42), lineWidth: 1)
-                                )
-                        )
+                        .buttonStyle(RemotePressStyle())
                     }
-                    .buttonStyle(RemotePressStyle())
                 }
             }
         }
@@ -530,47 +486,31 @@ struct ServerControlView: View {
                 }
             }
 
-            HStack(spacing: 8) {
-                Button {
-                    Haptics.medium()
-                    Task { await manager.setOneTimeBoot(selectedBootTarget, for: liveServer, rebootNow: false) }
-                } label: {
-                    Text("Назначить")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 11)
-                        .background(
-                            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                                .fill(Color.white.opacity(0.10))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 13, style: .continuous)
-                                        .strokeBorder(ServerPalette.glassBorderGradient, lineWidth: 1)
-                                )
-                        )
-                }
-                .buttonStyle(RemotePressStyle())
-
-                if selectedBootTarget != .none {
+            NativeGlassContainer(spacing: 8) {
+                HStack(spacing: 8) {
                     Button {
                         Haptics.medium()
-                        Task { await manager.setOneTimeBoot(selectedBootTarget, for: liveServer, rebootNow: true) }
+                        Task { await manager.setOneTimeBoot(selectedBootTarget, for: liveServer, rebootNow: false) }
                     } label: {
-                        Text("Назначить + Ребут")
+                        Text("Назначить")
                             .font(.caption.weight(.bold))
-                            .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 11)
-                            .background(
-                                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                                    .fill(ServerPalette.accentButtonGradient)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 13, style: .continuous)
-                                            .strokeBorder(ServerPalette.glassAccentBorder, lineWidth: 1)
-                                    )
-                            )
+                            .padding(.vertical, 4)
                     }
-                    .buttonStyle(RemotePressStyle())
+                    .nativeGlassButton(prominent: false)
+
+                    if selectedBootTarget != .none {
+                        Button {
+                            Haptics.medium()
+                            Task { await manager.setOneTimeBoot(selectedBootTarget, for: liveServer, rebootNow: true) }
+                        } label: {
+                            Text("Назначить + Ребут")
+                                .font(.caption.weight(.bold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 4)
+                        }
+                        .nativeGlassButton(prominent: true, tint: liveServer.vendor.accentColor)
+                    }
                 }
             }
         }
@@ -671,20 +611,13 @@ struct ServerControlView: View {
                     onOpenWebConsole()
                 }
             } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "desktopcomputer")
-                    Text("Открыть веб-панель")
-                }
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 13)
-                .background(
-                    RoundedRectangle(cornerRadius: 15, style: .continuous)
-                        .fill(ServerPalette.accentButtonGradient)
-                )
+                Label("Открыть веб-панель", systemImage: "desktopcomputer")
+                    .font(.subheadline.weight(.bold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 4)
             }
-            .buttonStyle(RemotePressStyle())
+            .nativeGlassButton(prominent: true, tint: ServerPalette.dellBlue)
+            .controlSize(.large)
         }
         .padding(18)
         .background(ServerGlassPanel(cornerRadius: 22, accentGlow: ServerPalette.warnAmber))
@@ -736,17 +669,14 @@ struct ServerControlView: View {
             )
 
             if let consumed = telemetry.powerConsumedWatts {
-                HStack {
-                    Text("Текущее потребление")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.68))
-                    Spacer()
+                NativeLabeledRow(title: "Текущее потребление") {
                     Text(
                         telemetry.powerCapacityWatts.map { "\(consumed) / \($0) Вт" } ?? "\(consumed) Вт"
                     )
                     .font(.system(.subheadline, design: .rounded).weight(.bold))
                     .foregroundStyle(ServerPalette.onlineGreen)
                 }
+                .font(.caption)
             }
 
             ForEach(telemetry.powerSupplies) { psu in
@@ -811,18 +741,10 @@ struct ServerControlView: View {
                         }
                     }
 
-                    GeometryReader { geo in
-                        let maxVal = max(sensor.upperCriticalC ?? 95.0, 95.0)
-                        let fraction = min(max(sensor.readingC / maxVal, 0.05), 1.0)
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(Color.white.opacity(0.08))
-                            Capsule()
-                                .fill(tempColor)
-                                .frame(width: geo.size.width * fraction)
-                        }
-                    }
-                    .frame(height: 5)
+                    let maxVal = max(sensor.upperCriticalC ?? 95.0, 95.0)
+                    ProgressView(value: min(max(sensor.readingC, 0), maxVal), total: maxVal)
+                        .progressViewStyle(.linear)
+                        .tint(tempColor)
                 }
                 .padding(.vertical, 2)
             }
@@ -1018,12 +940,15 @@ struct ServerControlView: View {
                     .padding(18)
                     .background(ServerGlassPanel(cornerRadius: 18))
                 } else if entries.isEmpty {
-                    Text("Журнал пуст или записи не возвращены этим контроллером.")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.60))
-                        .frame(maxWidth: .infinity)
-                        .padding(18)
-                        .background(ServerGlassPanel(cornerRadius: 18))
+                    NativeEmptyStateView(
+                        title: "Журнал пуст",
+                        systemImage: "list.bullet.rectangle.portrait",
+                        description: "Записи в журнале отсутствуют или не возвращены этим контроллером."
+                    ) {
+                        EmptyView()
+                    }
+                    .padding(14)
+                    .background(ServerGlassPanel(cornerRadius: 18))
                 } else {
                     VStack(spacing: 8) {
                         ForEach(entries) { entry in
@@ -1177,11 +1102,7 @@ struct ServerControlView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .background(
-                    Capsule()
-                        .fill(Color(red: 0.05, green: 0.12, blue: 0.22).opacity(0.95))
-                        .overlay(Capsule().strokeBorder(ServerPalette.glassAccentBorder, lineWidth: 1))
-                )
+                .nativeLiquidGlass(in: Capsule(), tint: ServerPalette.dellBlue.opacity(0.32))
                 .padding(.bottom, 22)
         }
         .allowsHitTesting(false)
