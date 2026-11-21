@@ -167,6 +167,9 @@ struct ServerHubView: View {
     @State private var editingProfile: ServerProfile?
     @State private var isCreatingNew = false
     @State private var newServerDefaultVendor: ServerVendor = .dellIDRAC
+    @State private var discoveryPrefill: ServerEditorPrefill?
+    @State private var isShowingDiscovery = false
+    @State private var activeControlServer: ServerProfile?
     @State private var activeConsoleServer: ServerProfile?
     @State private var powerMenuServer: ServerProfile?
     @State private var pendingConfirmAction: PendingPowerConfirm?
@@ -217,14 +220,38 @@ struct ServerHubView: View {
             ServerEditorSheet(
                 manager: manager,
                 existing: nil,
-                defaultVendor: newServerDefaultVendor
+                defaultVendor: newServerDefaultVendor,
+                prefill: nil
+            )
+        }
+        .sheet(item: $discoveryPrefill) { prefill in
+            ServerEditorSheet(
+                manager: manager,
+                existing: nil,
+                defaultVendor: prefill.vendor,
+                prefill: prefill
             )
         }
         .sheet(item: $editingProfile) { profile in
             ServerEditorSheet(
                 manager: manager,
                 existing: profile,
-                defaultVendor: profile.vendor
+                defaultVendor: profile.vendor,
+                prefill: nil
+            )
+        }
+        .sheet(isPresented: $isShowingDiscovery) {
+            ServerDiscoverySheet(manager: manager) { prefill in
+                discoveryPrefill = prefill
+            }
+        }
+        .fullScreenCover(item: $activeControlServer) { server in
+            ServerControlView(
+                manager: manager,
+                server: server,
+                onOpenWebConsole: {
+                    activeConsoleServer = server
+                }
             )
         }
         .fullScreenCover(item: $activeConsoleServer) { server in
@@ -245,23 +272,37 @@ struct ServerHubView: View {
             titleVisibility: .visible
         ) {
             if let server = powerMenuServer {
-                Button("Включить сервер (Redfish Power On)") {
-                    Task { await manager.sendPowerAction(.on, to: server) }
-                }
-                Button("Мягкое выключение (ACPI Shutdown)") {
-                    pendingConfirmAction = PendingPowerConfirm(server: server, action: .gracefulShutdown)
-                }
-                Button("Мягкая перезагрузка (Graceful Restart)") {
-                    pendingConfirmAction = PendingPowerConfirm(server: server, action: .gracefulRestart)
-                }
-                Button("Жёсткая перезагрузка (Force Reset)", role: .destructive) {
-                    pendingConfirmAction = PendingPowerConfirm(server: server, action: .forceRestart)
-                }
-                Button("Принудительно обесточить (Force Off)", role: .destructive) {
-                    pendingConfirmAction = PendingPowerConfirm(server: server, action: .forceOff)
-                }
-                Button("Переключить индикатор локатора LED") {
-                    Task { await manager.toggleLocatorLED(for: server) }
+                let caps = manager.capabilities(for: server)
+                let actions = (caps?.allowedResetTypes.isEmpty == false)
+                    ? (caps?.allowedResetTypes ?? [])
+                    : [ServerPowerAction.on, .gracefulShutdown, .gracefulRestart, .forceRestart, .forceOff]
+
+                if caps?.redfishSupported != false {
+                    ForEach(actions) { action in
+                        if action.isDestructive {
+                            Button(action.title, role: .destructive) {
+                                pendingConfirmAction = PendingPowerConfirm(server: server, action: action)
+                            }
+                        } else {
+                            Button(action.title) {
+                                if action.requiresConfirmation {
+                                    pendingConfirmAction = PendingPowerConfirm(server: server, action: action)
+                                } else {
+                                    Task { await manager.sendPowerAction(action, to: server) }
+                                }
+                            }
+                        }
+                    }
+                    if caps?.supportsIndicatorLED != false {
+                        Button("Переключить индикатор локатора LED") {
+                            Task { await manager.toggleLocatorLED(for: server) }
+                        }
+                    }
+                    if caps?.supportsManagerReset == true {
+                        Button("Перезагрузить контроллер \(caps?.bmcFamily.shortBadge ?? "BMC")") {
+                            Task { await manager.resetBMCManager(for: server) }
+                        }
+                    }
                 }
                 if server.hasValidMAC {
                     Button("Отправить Wake-on-LAN (MAC)") {
@@ -397,7 +438,12 @@ struct ServerHubView: View {
                             ServerDashboardCard(
                                 server: server,
                                 telemetry: manager.telemetry[server.id] ?? ServerTelemetry(),
+                                capabilities: manager.capabilities(for: server),
                                 hasPassword: !manager.password(for: server).isEmpty,
+                                onOpenControl: {
+                                    Haptics.medium()
+                                    activeControlServer = server
+                                },
                                 onOpenConsole: {
                                     Haptics.medium()
                                     activeConsoleServer = server
@@ -408,7 +454,7 @@ struct ServerHubView: View {
                                 },
                                 onRefresh: {
                                     Haptics.light()
-                                    Task { await manager.checkServer(server) }
+                                    Task { await manager.checkServer(server, deepProbe: true) }
                                 },
                                 onEdit: {
                                     Haptics.light()
@@ -464,6 +510,21 @@ struct ServerHubView: View {
             }
 
             Spacer(minLength: 4)
+
+            // Автопоиск iDRAC / BMC в локальной сети / VPN
+            Button {
+                Haptics.medium()
+                isShowingDiscovery = true
+            } label: {
+                ZStack {
+                    ServerGlassCircle()
+                    Image(systemName: "dot.radiowaves.left.and.right")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(ServerPalette.iruCyan)
+                }
+                .frame(width: 38, height: 38)
+            }
+            .buttonStyle(RemotePressStyle())
 
             // Переключатель защиты Face ID
             Button {
@@ -589,6 +650,33 @@ struct ServerHubView: View {
             VStack(spacing: 10) {
                 Button {
                     Haptics.medium()
+                    isShowingDiscovery = true
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "dot.radiowaves.left.and.right")
+                            .font(.body.weight(.bold))
+                        Text("Автопоиск iDRAC / BMC в сети")
+                            .font(.subheadline.weight(.bold))
+                        Spacer()
+                        Image(systemName: "magnifyingglass")
+                            .font(.body.weight(.bold))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(ServerPalette.accentButtonGradient)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .strokeBorder(ServerPalette.glassAccentBorder, lineWidth: 1)
+                            )
+                    )
+                }
+                .buttonStyle(RemotePressStyle())
+
+                Button {
+                    Haptics.medium()
                     newServerDefaultVendor = .dellIDRAC
                     isCreatingNew = true
                 } label: {
@@ -689,42 +777,62 @@ struct ServerHubView: View {
     }
 
     private var quickAddRow: some View {
-        HStack(spacing: 10) {
+        VStack(spacing: 10) {
             Button {
-                Haptics.light()
-                newServerDefaultVendor = .dellIDRAC
-                isCreatingNew = true
+                Haptics.medium()
+                isShowingDiscovery = true
             } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "plus")
+                HStack(spacing: 8) {
+                    Image(systemName: "dot.radiowaves.left.and.right")
                         .font(.caption.weight(.bold))
-                    Text("Dell iDRAC")
+                        .foregroundStyle(ServerPalette.iruCyan)
+                    Text("Найти iDRAC / iRU BMC в сети")
                         .font(.caption.weight(.bold))
+                        .foregroundStyle(.white)
                 }
-                .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
-                .background(ServerGlassPanel(cornerRadius: 16, accentGlow: ServerVendor.dellIDRAC.accentColor))
+                .background(ServerGlassPanel(cornerRadius: 16, accentGlow: ServerPalette.iruCyan))
             }
             .buttonStyle(RemotePressStyle())
 
-            Button {
-                Haptics.light()
-                newServerDefaultVendor = .iruBMC
-                isCreatingNew = true
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "plus")
-                        .font(.caption.weight(.bold))
-                    Text("iRU BMC")
-                        .font(.caption.weight(.bold))
+            HStack(spacing: 10) {
+                Button {
+                    Haptics.light()
+                    newServerDefaultVendor = .dellIDRAC
+                    isCreatingNew = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus")
+                            .font(.caption.weight(.bold))
+                        Text("Dell iDRAC")
+                            .font(.caption.weight(.bold))
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(ServerGlassPanel(cornerRadius: 16, accentGlow: ServerVendor.dellIDRAC.accentColor))
                 }
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(ServerGlassPanel(cornerRadius: 16, accentGlow: ServerVendor.iruBMC.accentColor))
+                .buttonStyle(RemotePressStyle())
+
+                Button {
+                    Haptics.light()
+                    newServerDefaultVendor = .iruBMC
+                    isCreatingNew = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus")
+                            .font(.caption.weight(.bold))
+                        Text("iRU BMC")
+                            .font(.caption.weight(.bold))
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(ServerGlassPanel(cornerRadius: 16, accentGlow: ServerVendor.iruBMC.accentColor))
+                }
+                .buttonStyle(RemotePressStyle())
             }
-            .buttonStyle(RemotePressStyle())
         }
     }
 }
@@ -734,7 +842,9 @@ struct ServerHubView: View {
 private struct ServerDashboardCard: View {
     let server: ServerProfile
     let telemetry: ServerTelemetry
+    let capabilities: ServerCapabilities?
     let hasPassword: Bool
+    let onOpenControl: () -> Void
     let onOpenConsole: () -> Void
     let onPowerMenu: () -> Void
     let onRefresh: () -> Void
@@ -780,9 +890,10 @@ private struct ServerDashboardCard: View {
                             .foregroundStyle(.white)
                             .lineLimit(1)
 
-                        Text(server.vendor.shortBadge)
+                        Text(capabilities?.shortVersionLabel ?? server.vendor.shortBadge)
                             .font(.system(size: 9, weight: .black))
                             .foregroundStyle(.white)
+                            .lineLimit(1)
                             .padding(.horizontal, 7)
                             .padding(.vertical, 3)
                             .background(
@@ -900,6 +1011,13 @@ private struct ServerDashboardCard: View {
                                     color: .white.opacity(0.80)
                                 )
                             }
+                            if let watts = telemetry.powerConsumedWatts {
+                                telemetryChip(
+                                    symbol: "bolt.fill",
+                                    text: "\(watts) Вт",
+                                    color: ServerPalette.onlineGreen
+                                )
+                            }
                             if let led = telemetry.indicatorLED, led.lowercased() == "lit" || led.lowercased() == "blinking" {
                                 telemetryChip(
                                     symbol: "lightbulb.fill",
@@ -928,14 +1046,14 @@ private struct ServerDashboardCard: View {
                     .lineLimit(2)
             }
 
-            // Основные действия: Открыть панель + Питание / WoL
-            HStack(spacing: 10) {
-                Button(action: onOpenConsole) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "desktopcomputer")
-                            .font(.subheadline.weight(.bold))
-                        Text("Открыть веб-панель")
-                            .font(.subheadline.weight(.bold))
+            // Основные действия: Нативный Пульт BMC + Веб-панель + быстрая кнопка Питания
+            HStack(spacing: 8) {
+                Button(action: onOpenControl) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.caption.weight(.bold))
+                        Text("Пульт BMC")
+                            .font(.caption.weight(.bold))
                     }
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
@@ -957,15 +1075,15 @@ private struct ServerDashboardCard: View {
                 }
                 .buttonStyle(RemotePressStyle())
 
-                Button(action: onPowerMenu) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "power")
-                            .font(.subheadline.weight(.bold))
-                        Text("Питание")
+                Button(action: onOpenConsole) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "desktopcomputer")
+                            .font(.caption.weight(.bold))
+                        Text("Веб-панель")
                             .font(.caption.weight(.bold))
                     }
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 14)
+                    .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(
                         RoundedRectangle(cornerRadius: 15, style: .continuous)
@@ -975,6 +1093,22 @@ private struct ServerDashboardCard: View {
                                     .strokeBorder(ServerPalette.glassBorderGradient, lineWidth: 1)
                             )
                     )
+                }
+                .buttonStyle(RemotePressStyle())
+
+                Button(action: onPowerMenu) {
+                    Image(systemName: "power")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 40)
+                        .background(
+                            RoundedRectangle(cornerRadius: 15, style: .continuous)
+                                .fill(Color.white.opacity(0.10))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 15, style: .continuous)
+                                        .strokeBorder(ServerPalette.glassBorderGradient, lineWidth: 1)
+                                )
+                        )
                 }
                 .buttonStyle(RemotePressStyle())
             }
@@ -1007,6 +1141,7 @@ struct ServerEditorSheet: View {
     @ObservedObject var manager: ServerManager
     let existing: ServerProfile?
     let defaultVendor: ServerVendor
+    var prefill: ServerEditorPrefill? = nil
 
     @Environment(\.dismiss) private var dismiss
 
@@ -1272,6 +1407,13 @@ struct ServerEditorSheet: View {
             desktopMode = profile.desktopMode
             autoFillLogin = profile.autoFillLogin
             redfishEnabled = profile.redfishEnabled
+        } else if let pre = prefill {
+            name = pre.name
+            vendor = pre.vendor
+            address = pre.address
+            username = pre.username
+            notes = pre.notes
+            redfishEnabled = pre.redfishEnabled
         } else {
             vendor = defaultVendor
             username = defaultVendor.defaultUsername

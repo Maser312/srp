@@ -5,11 +5,11 @@
 <key>CFBundleIdentifier</key><string>com.andrey.saluteremoteplus</string>
 <key>CFBundleExecutable</key><string>SaluteRemotePlus</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>2.2.0</string>
-<key>CFBundleVersion</key><string>29</string>
+<key>CFBundleShortVersionString</key><string>2.3.0</string>
+<key>CFBundleVersion</key><string>30</string>
 <key>LSRequiresIPhoneOS</key><true/>
-<key>NSLocalNetworkUsageDescription</key><string>Поиск телевизора Salute TV и подключение к серверам Dell и iRU в локальной сети.</string>
-<key>NSBonjourServices</key><array><string>_staros._tcp</string></array>
+<key>NSLocalNetworkUsageDescription</key><string>Поиск телевизора Salute TV и автопоиск серверов Dell iDRAC и iRU BMC в локальной сети.</string>
+<key>NSBonjourServices</key><array><string>_staros._tcp</string><string>_https._tcp</string><string>_http._tcp</string></array>
 <key>NSMicrophoneUsageDescription</key><string>Микрофон нужен для голосового ввода на телевизор Salute TV.</string>
 <key>NSFaceIDUsageDescription</key><string>Face ID используется для защиты доступа к панелям управления серверами Dell и iRU.</string>
 <key>NSBluetoothAlwaysUsageDescription</key><string>Bluetooth нужен для подключения и управления автомагнитолой Kenwood.</string>

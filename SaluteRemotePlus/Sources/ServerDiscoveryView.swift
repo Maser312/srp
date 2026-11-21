@@ -1,0 +1,383 @@
+import SwiftUI
+
+// MARK: - Автопоиск Dell iDRAC и iRU BMC в локальной сети / Kerio VPN
+
+struct ServerDiscoverySheet: View {
+    @ObservedObject var manager: ServerManager
+    let onSaveDiscovered: (ServerEditorPrefill) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var subnetInput: String = ""
+    @State private var includeHTTP: Bool = false
+    @State private var showAllWebHosts: Bool = false
+
+    private var visibleResults: [DiscoveredBMC] {
+        if showAllWebHosts {
+            return manager.discoveredBMCs
+        }
+        let confirmed = manager.discoveredBMCs.filter { $0.isConfirmedBMC }
+        return confirmed
+    }
+
+    private var otherHostsCount: Int {
+        manager.discoveredBMCs.filter { !$0.isConfirmedBMC }.count
+    }
+
+    var body: some View {
+        ZStack {
+            ServerLiquidBackdrop()
+
+            VStack(spacing: 0) {
+                Capsule()
+                    .fill(Color.white.opacity(0.24))
+                    .frame(width: 40, height: 4)
+                    .padding(.top, 10)
+
+                headerBar
+
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 14) {
+                        scannerConfigCard
+
+                        if manager.isScanningNetwork || !manager.scanStatusText.isEmpty {
+                            scanProgressCard
+                        }
+
+                        resultsSection
+
+                        Spacer(minLength: 24)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 6)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .onAppear {
+            manager.refreshSuggestedSubnets()
+            if subnetInput.isEmpty {
+                subnetInput = manager.suggestedSubnets.first ?? "192.168.1.0/24"
+            }
+        }
+        .onDisappear {
+            manager.stopNetworkScan()
+        }
+    }
+
+    // MARK: - Заголовок
+
+    private var headerBar: some View {
+        HStack {
+            Button("Закрыть") {
+                manager.stopNetworkScan()
+                dismiss()
+            }
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.white.opacity(0.70))
+
+            Spacer()
+
+            Text("Поиск iDRAC / BMC")
+                .font(.headline.weight(.bold))
+                .foregroundStyle(.white)
+
+            Spacer()
+
+            Text(manager.networkRoute.shortBadge)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(ServerPalette.bgTop)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(manager.networkRoute.indicatorColor))
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+    }
+
+    // MARK: - Настройка подсети и запуск сканера
+
+    private var scannerConfigCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("ПОДСЕТЬ ДЛЯ СКАНИРОВАНИЯ (LAN / KERIO VPN)")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(ServerPalette.iruCyan)
+
+            TextField("192.168.1.0/24 или 10.0.0.1-50", text: $subnetInput)
+                .keyboardType(.numbersAndPunctuation)
+                .autocapitalization(.none)
+                .disableAutocorrection(true)
+                .font(.system(.subheadline, design: .monospaced))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 11)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.black.opacity(0.34))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
+                        )
+                )
+
+            if !manager.suggestedSubnets.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(manager.suggestedSubnets, id: \.self) { cidr in
+                            let selected = (subnetInput == cidr)
+                            Button {
+                                Haptics.light()
+                                subnetInput = cidr
+                            } label: {
+                                Text(cidr)
+                                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(selected ? Color.white : Color.white.opacity(0.74))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(
+                                        Capsule()
+                                            .fill(selected ? ServerPalette.dellBlue.opacity(0.55) : Color.white.opacity(0.08))
+                                            .overlay(
+                                                Capsule()
+                                                    .strokeBorder(
+                                                        selected ? ServerPalette.iruCyan : Color.white.opacity(0.14),
+                                                        lineWidth: 1
+                                                    )
+                                            )
+                                    )
+                            }
+                            .buttonStyle(RemotePressStyle())
+                        }
+                    }
+                }
+            }
+
+            Toggle(isOn: $includeHTTP) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Проверять порт 80 (HTTP)")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white)
+                    Text("Для старых iDRAC и BMC без HTTPS (сканирование немного дольше)")
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.55))
+                }
+            }
+            .tint(ServerPalette.iruCyan)
+
+            Button {
+                Haptics.medium()
+                if manager.isScanningNetwork {
+                    manager.stopNetworkScan()
+                } else {
+                    manager.startNetworkScan(subnetInput: subnetInput, includeHTTP: includeHTTP)
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: manager.isScanningNetwork ? "stop.fill" : "dot.radiowaves.left.and.right")
+                        .font(.subheadline.weight(.bold))
+                    Text(manager.isScanningNetwork ? "Остановить сканирование" : "Найти iDRAC и iRU BMC")
+                        .font(.subheadline.weight(.bold))
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 13)
+                .background(
+                    RoundedRectangle(cornerRadius: 15, style: .continuous)
+                        .fill(
+                            manager.isScanningNetwork
+                                ? LinearGradient(colors: [ServerPalette.dangerRed, ServerPalette.dangerRed.opacity(0.75)], startPoint: .leading, endPoint: .trailing)
+                                : ServerPalette.accentButtonGradient
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 15, style: .continuous)
+                                .strokeBorder(ServerPalette.glassAccentBorder, lineWidth: 1)
+                        )
+                )
+            }
+            .buttonStyle(RemotePressStyle())
+        }
+        .padding(14)
+        .background(ServerGlassPanel(cornerRadius: 20, accentGlow: ServerPalette.iruCyan))
+    }
+
+    // MARK: - Прогресс сканирования
+
+    private var scanProgressCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                if manager.isScanningNetwork {
+                    ProgressView()
+                        .tint(ServerPalette.iruCyan)
+                        .scaleEffect(0.8)
+                }
+                Text(manager.scanStatusText)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.84))
+                Spacer()
+                Text("\(Int((manager.scanProgress * 100).rounded()))%")
+                    .font(.system(.caption2, design: .monospaced).weight(.bold))
+                    .foregroundStyle(ServerPalette.iruCyan)
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.10))
+                    Capsule()
+                        .fill(ServerPalette.accentButtonGradient)
+                        .frame(width: geo.size.width * min(max(manager.scanProgress, 0.02), 1.0))
+                }
+            }
+            .frame(height: 6)
+        }
+        .padding(13)
+        .background(ServerGlassPanel(cornerRadius: 16))
+    }
+
+    // MARK: - Найденные контроллеры
+
+    private var resultsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if otherHostsCount > 0 {
+                Toggle(isOn: $showAllWebHosts) {
+                    Text("Показать прочие HTTPS/HTTP хосты (\(otherHostsCount))")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.78))
+                }
+                .tint(ServerPalette.iruCyan)
+                .padding(.horizontal, 6)
+            }
+
+            if visibleResults.isEmpty {
+                if !manager.isScanningNetwork && manager.discoveredBMCs.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass.circle")
+                            .font(.system(size: 30))
+                            .foregroundStyle(ServerPalette.iruCyan.opacity(0.75))
+                        Text("Сканер определяет Dell iDRAC (7/8/9), iRU AMI MegaRAC и OpenBMC по Redfish и заголовкам веб-интерфейса. Работает как по локальному Wi-Fi, так и через Kerio VPN.")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.62))
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(18)
+                    .background(ServerGlassPanel(cornerRadius: 18))
+                } else if !manager.isScanningNetwork && otherHostsCount > 0 && !showAllWebHosts {
+                    Text("Подтверждённые iDRAC/BMC не обнаружены, но найдено \(otherHostsCount) веб-хостов — включите переключатель выше, чтобы увидеть их.")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.68))
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(ServerGlassPanel(cornerRadius: 16))
+                }
+            } else {
+                ForEach(visibleResults) { item in
+                    discoveredCard(item)
+                }
+            }
+        }
+    }
+
+    private func discoveredCard(_ item: DiscoveredBMC) -> some View {
+        let alreadySaved = manager.isAlreadySaved(ip: item.ip)
+
+        return HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [item.vendor.accentColor, item.vendor.secondaryAccentColor],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                Image(systemName: item.vendor.symbol)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.white)
+            }
+            .frame(width: 42, height: 42)
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(item.suggestedName)
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+
+                    if item.isConfirmedBMC {
+                        Text(item.bmcFamily.shortBadge)
+                            .font(.system(size: 9, weight: .black))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(item.vendor.accentColor.opacity(0.45)))
+                    }
+                }
+
+                Text("\(item.addressURLString) · \(item.latencyMs) мс")
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.68))
+
+                HStack(spacing: 6) {
+                    if item.redfishSupported {
+                        Text(item.redfishVersion.map { "Redfish \($0)" } ?? "Redfish API")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(ServerPalette.onlineGreen)
+                    } else if let title = item.detectedTitle, !title.isEmpty {
+                        Text(title)
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.54))
+                            .lineLimit(1)
+                    }
+                }
+            }
+
+            Spacer(minLength: 4)
+
+            if alreadySaved {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.circle.fill")
+                    Text("В списке")
+                }
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(ServerPalette.onlineGreen)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(
+                    Capsule()
+                        .fill(ServerPalette.onlineGreen.opacity(0.16))
+                )
+            } else {
+                Button {
+                    Haptics.medium()
+                    manager.stopNetworkScan()
+                    let prefill = ServerEditorPrefill(
+                        name: item.suggestedName,
+                        vendor: item.vendor,
+                        address: item.addressURLString,
+                        username: item.vendor.defaultUsername,
+                        redfishEnabled: item.redfishSupported || item.isConfirmedBMC,
+                        notes: item.detectedTitle ?? ""
+                    )
+                    dismiss()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) {
+                        onSaveDiscovered(prefill)
+                    }
+                } label: {
+                    Text("Сохранить")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule()
+                                .fill(ServerPalette.accentButtonGradient)
+                                .overlay(Capsule().strokeBorder(ServerPalette.glassAccentBorder, lineWidth: 1))
+                        )
+                }
+                .buttonStyle(RemotePressStyle())
+            }
+        }
+        .padding(13)
+        .background(ServerGlassPanel(cornerRadius: 18, accentGlow: item.isConfirmedBMC ? item.vendor.accentColor : nil))
+    }
+}
