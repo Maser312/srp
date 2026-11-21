@@ -434,9 +434,20 @@ struct RemotePadView: View {
     @ObservedObject var remote: UniversalTVRemoteManager
     let onBackToMenu: () -> Void
 
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("SaluteRemotePlus.padMode") private var storedPadModeRaw = CenterPadMode.dpad.rawValue
+    @AppStorage("SaluteRemotePlus.hardwareVolumeEnabled") private var hardwareVolumeEnabled = true
     @State private var showTextSheet = false
     @State private var showTVHubSheet = false
+
+    private var isHardwareVolumeActive: Bool {
+        hardwareVolumeEnabled
+            && scenePhase == .active
+            && remote.voiceState == .idle
+            && !showTextSheet
+            && !showTVHubSheet
+            && !remote.needsPin
+    }
 
     private var padMode: CenterPadMode {
         let candidate = CenterPadMode(rawValue: storedPadModeRaw) ?? .dpad
@@ -513,6 +524,16 @@ struct RemotePadView: View {
                             } label: {
                                 Label("Найти физический пульт", systemImage: "dot.radiowaves.left.and.right")
                             }
+                        }
+
+                        Button {
+                            Haptics.tap()
+                            hardwareVolumeEnabled.toggle()
+                        } label: {
+                            Label(
+                                "Кнопки громкости iPhone",
+                                systemImage: hardwareVolumeEnabled ? "checkmark.circle.fill" : "circle"
+                            )
                         }
 
                         Divider()
@@ -788,8 +809,9 @@ struct RemotePadView: View {
             }
         }
         .onChange(of: remote.activePlatform) { _ in
-            if !remote.availablePadModes.contains(padMode) {
-                padMode = .dpad
+            if let current = CenterPadMode(rawValue: storedPadModeRaw),
+               !remote.availablePadModes.contains(current) {
+                storedPadModeRaw = CenterPadMode.dpad.rawValue
             }
         }
         .sheet(isPresented: $showTextSheet) {
@@ -800,6 +822,11 @@ struct RemotePadView: View {
                 showTVHubSheet = false
             }
         }
+        .onHardwareVolumeButtons(
+            isActive: isHardwareVolumeActive,
+            onVolumeUp: { send(.volumeUp) },
+            onVolumeDown: { send(.volumeDown) }
+        )
     }
 
     private func send(_ command: RemoteCommand) {
@@ -1776,6 +1803,15 @@ private struct CompactSearchSheetDetentModifier: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+struct RemotePressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.94 : 1.0)
+            .opacity(configuration.isPressed ? 0.84 : 1.0)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
